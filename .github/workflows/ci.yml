@@ -1,0 +1,153 @@
+name: SafePath AI CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  JAVA_VERSION: '21'
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # ──────────────────────────────────────────
+  # Backend Tests
+  # ──────────────────────────────────────────
+  backend-test:
+    name: Backend Tests (Java ${{ env.JAVA_VERSION }})
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:15-3.4
+        env:
+          POSTGRES_DB: safepath_test_db
+          POSTGRES_USER: safepath_test
+          POSTGRES_PASSWORD: test_password_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run backend tests
+        working-directory: ./backend
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: safepath_test_db
+          POSTGRES_USER: safepath_test
+          POSTGRES_PASSWORD: test_password_ci
+          JWT_SECRET: ci_test_jwt_secret_that_is_long_enough_for_hs256_at_least_256_bits
+          ML_SERVICE_URL: http://localhost:8001
+        run: ./mvnw test -B
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: backend/target/surefire-reports/
+
+  # ──────────────────────────────────────────
+  # ML Service Tests
+  # ──────────────────────────────────────────
+  ml-test:
+    name: ML Service Tests (Python ${{ env.PYTHON_VERSION }})
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install ML dependencies
+        working-directory: ./ml-service
+        run: pip install -r requirements.txt
+
+      - name: Run ML tests
+        working-directory: ./ml-service
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-test-results
+          path: ml-service/test-results/
+
+  # ──────────────────────────────────────────
+  # Mobile Lint & Type Check
+  # ──────────────────────────────────────────
+  mobile-check:
+    name: Mobile Lint & TypeScript Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies
+        working-directory: ./mobile
+        run: npm ci
+
+      - name: TypeScript type check
+        working-directory: ./mobile
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: ./mobile
+        run: npm run lint
+
+  # ──────────────────────────────────────────
+  # Backend Build (JAR)
+  # ──────────────────────────────────────────
+  backend-build:
+    name: Backend Build
+    runs-on: ubuntu-latest
+    needs: backend-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build JAR (skip tests)
+        working-directory: ./backend
+        run: ./mvnw clean package -DskipTests -B
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+          retention-days: 7

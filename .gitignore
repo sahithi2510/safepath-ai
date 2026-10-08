@@ -1,0 +1,147 @@
+# ============================================================
+# SafePath AI — .gitignore
+# ============================================================
+
+# -------------------------------------------------------
+# Secrets / Environment
+# -------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+
+# -------------------------------------------------------
+# Java / Spring Boot
+# -------------------------------------------------------
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/*.class
+backend/*.jar
+backend/*.war
+backend/hs_err_pid*
+backend/.classpath
+backend/.project
+backend/.settings/
+backend/.apt_generated/
+backend/HELP.md
+
+# -------------------------------------------------------
+# Python / FastAPI / ML
+# -------------------------------------------------------
+ml-service/__pycache__/
+ml-service/*.pyc
+ml-service/*.pyo
+ml-service/.venv/
+ml-service/venv/
+ml-service/.env
+ml-service/dist/
+ml-service/build/
+ml-service/*.egg-info/
+scripts/__pycache__/
+scripts/*.pyc
+scripts/.venv/
+scripts/venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+# -------------------------------------------------------
+# React Native / Expo / Node
+# -------------------------------------------------------
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/web-build/
+mobile/android/
+mobile/ios/
+mobile/.env
+mobile/*.jks
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+
+# -------------------------------------------------------
+# Models (large binary files — use Git LFS if needed)
+# -------------------------------------------------------
+models/*.pkl
+models/*.joblib
+models/*.h5
+models/*.onnx
+models/*.bin
+models/*.pt
+models/*.pth
+
+# -------------------------------------------------------
+# Datasets (raw data — may be large)
+# -------------------------------------------------------
+datasets/raw/*.csv
+datasets/raw/*.xlsx
+datasets/raw/*.zip
+datasets/raw/*.json
+datasets/processed/*.csv
+datasets/processed/*.parquet
+datasets/processed/*.feather
+
+# -------------------------------------------------------
+# Docker
+# -------------------------------------------------------
+docker/volumes/
+docker/postgres-data/
+
+# -------------------------------------------------------
+# IDE / OS
+# -------------------------------------------------------
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+*.iml
+*.iws
+*.ipr
+.classpath
+.project
+
+# -------------------------------------------------------
+# Test / Coverage
+# -------------------------------------------------------
+backend/target/surefire-reports/
+ml-service/.coverage
+ml-service/htmlcov/
+ml-service/.pytest_cache/
+tests/.pytest_cache/
+coverage/
+*.lcov
+
+# -------------------------------------------------------
+# Build artifacts
+# -------------------------------------------------------
+*.apk
+*.aab
+*.ipa
+output/
+
+# -------------------------------------------------------
+# Logs
+# -------------------------------------------------------
+*.log
+logs/
+backend/logs/
+ml-service/logs/
