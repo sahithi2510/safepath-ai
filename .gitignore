@@ -127,6 +127,9 @@ ml-service/.coverage
 ml-service/htmlcov/
 ml-service/.pytest_cache/
 tests/.pytest_cache/
+.pytest_cache/
+.geocoding_cache.*
+*.sqlite
 coverage/
 *.lcov
 

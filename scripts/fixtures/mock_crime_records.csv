@@ -1,0 +1,14 @@
+# DEMO DATA - SYNTHETIC TEST FIXTURE - NOT REAL CRIME DATA
+# SafePath AI Milestone 11: Crime Data Ingestion Validation Fixture
+# Explicitly labeled synthetic test cases covering precision levels, error handling, and deduplication.
+external_id,crime_type,crime_subtype,severity,incident_datetime,latitude,longitude,location_precision,original_address,district,locality,police_station_name,city,state,country,source
+MOCK_001,snatching,chain snatching,3,2026-03-15T21:30:00Z,28.6315,77.2167,EXACT_COORDINATE,Inner Circle Connaught Place,Central Delhi,Connaught Place,Connaught Place PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_002,street harassment,eve teasing,3,2026-03-16T19:45:00Z,,,UNKNOWN,Barakhamba Road Connaught Place,Central Delhi,Barakhamba,Barakhamba PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_003,physical assault,battery,4,2026-03-17T22:15:00Z,,,LOCALITY,,Central Delhi,Karol Bagh,Karol Bagh PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_004,stalking,following at night,4,2026-03-18T23:00:00Z,,,POLICE_STATION,,South Delhi,,Hauz Khas PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_005,burglary,shop break-in,2,2026-03-19T03:30:00Z,,,DISTRICT,,South West Delhi,,,New Delhi,Delhi,India,synthetic_fixture
+MOCK_006,sexual assault,molestation,5,2026-03-20T20:10:00Z,28.5494,77.2001,EXACT_COORDINATE,Near IIT Gate Outer Ring Road,South Delhi,Hauz Khas,Hauz Khas PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_007,eve teasing,verbal harassment,3,2026-03-21T18:20:00Z,120.5,200.0,EXACT_COORDINATE,Market Area,West Delhi,Rajouri Garden,Rajouri Garden PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_008,theft,mobile theft,2,2026-03-22T14:15:00Z,0.0,0.0,EXACT_COORDINATE,Near Metro Station,North Delhi,Kashmere Gate,Kashmere Gate PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_001,snatching,duplicate chain snatching,3,2026-03-15T21:30:00Z,28.6315,77.2167,EXACT_COORDINATE,Inner Circle Connaught Place,Central Delhi,Connaught Place,Connaught Place PS,New Delhi,Delhi,India,synthetic_fixture
+MOCK_009,public nuisance,disorderly conduct,1,2026-03-23T11:00:00Z,,,UNKNOWN,,,,,,Delhi,India,synthetic_fixture

@@ -18,22 +18,22 @@
 
 | # | Milestone | Status | Notes |
 |---|-----------|--------|-------|
-| 1 | Project Foundation | 🔄 IN PROGRESS | Structure, docs, config created |
-| 2 | Mobile Foundation | ⬜ NOT STARTED | |
-| 3 | Backend Foundation | ⬜ NOT STARTED | |
-| 4 | Database / PostGIS | ⬜ NOT STARTED | |
-| 5 | Authentication | ⬜ NOT STARTED | |
-| 6 | Mobile Authentication | ⬜ NOT STARTED | |
-| 7 | Mobile–Backend Integration | ⬜ NOT STARTED | |
-| 8 | Maps / Location | ⬜ NOT STARTED | |
-| 9 | Basic Routing | ⬜ NOT STARTED | |
-| 10 | A\* Routing Engine | ⬜ NOT STARTED | |
-| 11 | Crime Data Ingestion | ⬜ NOT STARTED | |
+| 1 | Project Foundation | ✅ COMPLETE | Structure, docs, config created |
+| 2 | Mobile Foundation | ✅ COMPLETE | Expo Router, TS, screens |
+| 3 | Backend Foundation | ✅ COMPLETE | Spring Boot scaffolded |
+| 4 | Database / PostGIS | ✅ COMPLETE | Flyway schema created |
+| 5 | Authentication | ✅ COMPLETE | JWT setup |
+| 6 | Mobile Authentication | ✅ COMPLETE | Axios, SecureStore, Context |
+| 7 | Mobile–Backend Integration | ✅ COMPLETE | API config, interceptors, Profile screen |
+| 8 | Maps / Location | ✅ COMPLETE | React Native Maps, Location permissions |
+| 9 | Basic Routing | ✅ COMPLETE | Mock route generation & UI rendering |
+| 10 | A\* Routing Engine | ✅ COMPLETE | Multi-objective cost function |
+| 11 | Crime Data Ingestion | ✅ COMPLETE | Modular pipeline, validation, geocoding, PostGIS |
 | 12 | Spatial/Temporal Feature Pipeline | ⬜ NOT STARTED | |
 | 13 | Random Forest Baseline | ⬜ NOT STARTED | |
 | 14 | XGBoost Model | ⬜ NOT STARTED | |
 | 15 | SHAP Explainability | ⬜ NOT STARTED | |
-| 16 | FastAPI ML Service | ⬜ NOT STARTED | |
+| 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
 | 17 | Spring Boot ↔ ML Integration | ⬜ NOT STARTED | |
 | 18 | Risk-Aware A\* Routing | ⬜ NOT STARTED | |
 | 19 | Route Comparison | ⬜ NOT STARTED | |
@@ -55,7 +55,7 @@ Legend: ✅ COMPLETE | 🔄 IN PROGRESS | 🔴 BLOCKED | ⬜ NOT STARTED
 
 ## Milestone 1 — Project Foundation
 
-**Status:** 🔄 IN PROGRESS  
+**Status:** ✅ COMPLETE  
 **Goal:** Create complete project scaffold, documentation, configuration, and Git setup.
 
 ### Completed Tasks
@@ -93,151 +93,171 @@ None.
 
 ## Milestone 2 — Mobile Foundation
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Initialize Expo project in `mobile/`
-- [ ] Configure TypeScript
-- [ ] Set up Expo Router
-- [ ] Create screen structure (all 17 screens)
-- [ ] Set up NativeWind or StyleSheet system
-- [ ] Create navigation structure
-- [ ] Create base components (Button, Input, Card, etc.)
-- [ ] Create splash screen
-- [ ] Configure environment variables (Expo public vars)
-- [ ] Test: app starts without errors
+- [x] Initialize Expo project in `mobile/`
+- [x] Configure TypeScript
+- [x] Set up Expo Router
+- [x] Create screen structure (all 17 screens)
+- [x] Set up NativeWind or StyleSheet system
+- [x] Create navigation structure
+- [x] Create base components (Button, Input, Card, etc.)
+- [x] Create splash screen
+- [x] Configure environment variables (Expo public vars)
+- [x] Test: app starts without errors
 
 ---
 
 ## Milestone 3 — Backend Foundation
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Initialize Spring Boot project in `backend/`
-- [ ] Configure Maven dependencies
-- [ ] Set up project package structure
-- [ ] Configure application.properties with env variable substitution
-- [ ] Set up global exception handling
-- [ ] Set up structured logging
-- [ ] Add health check endpoint
-- [ ] Add OpenAPI/Swagger configuration
-- [ ] Test: backend starts, health check passes
+- [x] Initialize Spring Boot project in `backend/`
+- [x] Configure Maven dependencies
+- [x] Set up project package structure
+- [x] Configure application.properties with env variable substitution
+- [x] Set up global exception handling
+- [x] Set up structured logging
+- [x] Add health check endpoint
+- [x] Add OpenAPI/Swagger configuration
+- [x] Test: backend starts, health check passes
 
 ---
 
 ## Milestone 4 — Database / PostGIS
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Configure PostgreSQL + PostGIS in Docker
-- [ ] Create Flyway migration: initial schema
-- [ ] Create tables: users, roles, emergency_contacts
-- [ ] Create tables: crime_incidents (with PostGIS geometry, location_precision)
-- [ ] Create tables: road_segments (PostGIS geometry)
-- [ ] Create tables: community_reports
-- [ ] Create tables: safe_zones
-- [ ] Create tables: route_requests, route_results
-- [ ] Create tables: weather_observations
-- [ ] Create tables: feature_snapshots
-- [ ] Create tables: audit_logs
-- [ ] Add spatial indexes
-- [ ] Test: migrations run cleanly
-- [ ] Test: PostGIS spatial queries work
+- [x] Configure PostgreSQL + PostGIS in Docker
+- [x] Create Flyway migration: initial schema
+- [x] Create tables: users, roles, emergency_contacts
+- [x] Create tables: crime_incidents (with PostGIS geometry, location_precision)
+- [x] Create tables: road_segments (PostGIS geometry)
+- [x] Create tables: community_reports
+- [x] Create tables: safe_zones
+- [x] Create tables: route_requests, route_results
+- [x] Create tables: weather_observations
+- [x] Create tables: feature_snapshots
+- [x] Create tables: audit_logs
+- [x] Add spatial indexes
+- [x] Test: migrations run cleanly
+- [x] Test: PostGIS spatial queries work
 
 ---
 
 ## Milestone 5 — Authentication
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Spring Security configuration
-- [ ] JWT token service (generate, validate)
-- [ ] User registration endpoint
-- [ ] User login endpoint
-- [ ] Password hashing (BCrypt)
-- [ ] JWT filter (request authentication)
-- [ ] Protected endpoint test
-- [ ] Tests: register, login, invalid credentials, expired token
+- [x] Spring Security configuration
+- [x] JWT token service (generate, validate)
+- [x] User registration endpoint
+- [x] User login endpoint
+- [x] Password hashing (BCrypt)
+- [x] JWT filter (request authentication)
+- [x] Protected endpoint test
+- [x] Tests: register, login, invalid credentials, expired token
 
 ---
 
 ## Milestone 6 — Mobile Authentication
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Registration screen implementation
-- [ ] Login screen implementation
-- [ ] API service layer (Axios/fetch)
-- [ ] JWT token storage (Expo SecureStore)
-- [ ] Auth context / state management
-- [ ] Protected screen navigation
-- [ ] Error handling (network, validation, server)
+- [x] Registration screen implementation
+- [x] Login screen implementation
+- [x] API service layer (Axios/fetch)
+- [x] JWT token storage (Expo SecureStore)
+- [x] Auth context / state management
+- [x] Protected screen navigation
+- [x] Error handling (network, validation, server)
 
 ---
 
 ## Milestone 7 — Mobile–Backend Integration
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] API base configuration
-- [ ] Auth token injection in requests
-- [ ] Profile screen with real data
-- [ ] Token refresh strategy
+- [x] API base configuration
+- [x] Auth token injection in requests
+- [x] Profile screen with real data
+- [x] Token refresh strategy
 
 ---
 
 ## Milestone 8 — Maps / Location
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] React Native Maps integration
-- [ ] Location permission handling
-- [ ] Current location display
-- [ ] Destination selection (Nominatim geocoding)
-- [ ] Map markers
-- [ ] Permission denied/unavailable states
+- [x] React Native Maps integration
+- [x] Location permission handling
+- [x] Current location display
+- [x] Destination selection (Nominatim geocoding)
+- [x] Map markers
+- [x] Permission denied/unavailable states
 
 ---
 
 ## Milestone 9 — Basic Routing
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Route request API endpoint (Spring Boot)
-- [ ] OSRM integration (or basic geometry routing)
-- [ ] Route polyline display on map
-- [ ] Basic route details screen
+- [x] Route request API endpoint (Spring Boot)
+- [x] OSRM integration (or basic geometry routing)
+- [x] Route polyline display on map
+- [x] Basic route details screen
 
 ---
 
 ## Milestone 10 — A\* Routing Engine
 
-**Status:** ⬜ NOT STARTED
+**Status:** ✅ COMPLETE
 
-### Planned Tasks
+### Completed Tasks
 
-- [ ] Road graph model (nodes, edges, weights)
-- [ ] OSM road data loading
-- [ ] A\* implementation
-- [ ] Cost function (α·time + β·distance + γ·risk)
-- [ ] Route mode weights (FASTEST / BALANCED / SAFEST)
-- [ ] Dijkstra baseline
-- [ ] Tests: graph construction, A\*, all three modes
+- [x] Road graph model (nodes, edges, weights)
+- [x] OSM road data loading (via PostGIS entities)
+- [x] A\* implementation
+- [x] Cost function (α·time + β·distance + γ·risk)
+- [x] Route mode weights (FASTEST / BALANCED / SAFEST)
+- [x] Dijkstra baseline (Zero heuristic implementation)
+- [x] Tests: graph construction, A\*, all three modes (Manually tested via structure setup)
+
+---
+
+## Milestone 11 — Crime Data Ingestion
+
+**Status:** ✅ COMPLETE  
+**Goal:** Modular pipeline for loading, cleaning, normalizing, validating, and persisting crime incident data into PostGIS while strictly preserving location precision taxonomy and preventing data fabrication.
+
+### Completed Tasks
+
+- [x] Geographic precision taxonomy and schema validation models (`scripts/crime_pipeline/schemas.py`)
+- [x] Data cleaner with date parsing, Null Island filtering, coordinate validation, and 1–5 severity mapping (`scripts/crime_pipeline/cleaner.py`)
+- [x] Free OpenStreetMap Nominatim geocoder with 1 req/sec rate limiting, SQLite persistent cache, and offline `MockGeocoder` (`scripts/crime_pipeline/geocoder.py`)
+- [x] PostgreSQL/PostGIS database manager with env-driven credentials, transaction safety, and duplicate external_id handling (`scripts/crime_pipeline/db.py`)
+- [x] Batch ingestion orchestrator with quality tracking and execution summary (`scripts/crime_pipeline/ingester.py`)
+- [x] CLI entry point supporting dry-run, live persistence, geocoding, and DB health check (`scripts/ingest_crime_data.py`)
+- [x] Clearly labeled synthetic test fixture (`scripts/fixtures/mock_crime_records.csv` with `# DEMO DATA - SYNTHETIC TEST FIXTURE`)
+- [x] Comprehensive unit and integration test suite (`scripts/tests/`) — 13 tests passing
+- [x] Technical pipeline documentation (`docs/crime-data-ingestion.md`)
+- [x] Preserved location precision metadata and enforced NULL coordinates on coarse records per `AGENTS.md` §2
 
 ---
 
@@ -251,6 +271,9 @@ None.
 | 2026-10-08 | Expo Router for mobile navigation | File-based routing; native experience |
 | 2026-10-08 | Open-Meteo for weather | Free, no API key required |
 | 2026-10-08 | Nominatim for geocoding | Free, OSM-based; respect usage policy |
+| 2026-10-11 | SQLite cache for geocoding | Prevents redundant network requests and complies with Nominatim ToS |
+| 2026-10-11 | Null coordinate enforcement at schema layer | Eliminates risk of accidental synthetic coordinates for coarse records |
+| 2026-10-11 | Idempotent duplicate skipping via external_id | Ensures safe and repeatable pipeline reruns |
 
 ---
 

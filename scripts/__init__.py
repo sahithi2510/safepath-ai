@@ -1,0 +1,1 @@
+"""SafePath AI scripts package."""
