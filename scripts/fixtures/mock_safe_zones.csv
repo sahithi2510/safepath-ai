@@ -1,0 +1,9 @@
+# DEMO DATA - SYNTHETIC TEST FIXTURE - NOT REAL SAFE ZONE LOCATIONS
+# SafePath AI Milestone 12: Safe Zones Verification Fixture
+id,name,zone_type,latitude,longitude,city
+SZ_001,Connaught Place Police Station,police,28.6328,77.2195,New Delhi
+SZ_002,Hauz Khas Police Station,police,28.5470,77.2025,New Delhi
+SZ_003,Lady Hardinge Hospital,hospital,28.6340,77.2140,New Delhi
+SZ_004,AIIMS Hospital,hospital,28.5672,77.2100,New Delhi
+SZ_005,Rajiv Chowk Metro Station,transport,28.6328,77.2195,New Delhi
+SZ_006,Hauz Khas Metro Station,transport,28.5435,77.2065,New Delhi

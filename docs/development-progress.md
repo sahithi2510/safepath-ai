@@ -29,7 +29,7 @@
 | 9 | Basic Routing | ✅ COMPLETE | Mock route generation & UI rendering |
 | 10 | A\* Routing Engine | ✅ COMPLETE | Multi-objective cost function |
 | 11 | Crime Data Ingestion | ✅ COMPLETE | Modular pipeline, validation, geocoding, PostGIS |
-| 12 | Spatial/Temporal Feature Pipeline | ⬜ NOT STARTED | |
+| 12 | Spatial/Temporal Feature Pipeline | ✅ COMPLETE | Metric KDE, anti-leakage, temporal features |
 | 13 | Random Forest Baseline | ⬜ NOT STARTED | |
 | 14 | XGBoost Model | ⬜ NOT STARTED | |
 | 15 | SHAP Explainability | ⬜ NOT STARTED | |
@@ -261,6 +261,26 @@ None.
 
 ---
 
+## Milestone 12 — Spatial/Temporal Feature Pipeline
+
+**Status:** ✅ COMPLETE  
+**Goal:** Build a reproducible Python pipeline deriving spatial densities, temporal contexts, emergency proximities, and infrastructure proxies for road segments, strictly adhering to anti-leakage rules and location precision taxonomy.
+
+### Completed Tasks
+
+- [x] Feature pipeline configuration and data models (`scripts/feature_pipeline/schemas.py`) matching `FEATURE_NAMES` in `ml-service`
+- [x] Calendar and cyclical temporal feature extraction (`scripts/feature_pipeline/temporal.py`) with missing timestamp handling
+- [x] Projected metric spatial density extractor (`scripts/feature_pipeline/spatial.py`) implementing Gaussian KDE ($\sigma=200m$) and emergency proximities in EPSG:3857
+- [x] Strict precision isolation ensuring coarse records (`LOCALITY`, `POLICE_STATION`, `DISTRICT`, `UNKNOWN`) are never used for point-level KDE
+- [x] Anti-leakage guard (`scripts/feature_pipeline/leakage_guard.py`) implementing temporal observation window masking and chronological train/val/test splits
+- [x] Feature pipeline orchestrator (`scripts/feature_pipeline/pipeline.py`) generating complete feature datasets
+- [x] CLI entry point (`scripts/generate_features.py`) with `--dry-run` and CSV export
+- [x] Synthetic fixtures for road segments (`mock_road_segments.csv`) and safe zones (`mock_safe_zones.csv`) labeled `# DEMO DATA - SYNTHETIC TEST FIXTURE`
+- [x] Comprehensive unit and integration test suite (`scripts/tests/`) — 12 new tests (total 27 workspace tests passing)
+- [x] Technical documentation (`docs/spatial-temporal-feature-pipeline.md`)
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -274,6 +294,9 @@ None.
 | 2026-10-11 | SQLite cache for geocoding | Prevents redundant network requests and complies with Nominatim ToS |
 | 2026-10-11 | Null coordinate enforcement at schema layer | Eliminates risk of accidental synthetic coordinates for coarse records |
 | 2026-10-11 | Idempotent duplicate skipping via external_id | Ensures safe and repeatable pipeline reruns |
+| 2026-10-11 | Metric projection EPSG:3857 for KDE | Ensures distance calculations (500m, 1km, sigma) represent ground meters accurately |
+| 2026-10-11 | Temporal masking (incident_datetime < query_time) | Strictly prevents future crime data from leaking into past evaluation features |
+| 2026-10-11 | Point-level KDE isolation | Guarantees coarse records are excluded from continuous point densities |
 
 ---
 

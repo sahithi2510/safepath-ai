@@ -1,0 +1,9 @@
+# DEMO DATA - SYNTHETIC TEST FIXTURE - NOT REAL ROAD DATA
+# SafePath AI Milestone 12: Road Segment Feature Verification Fixture
+id,road_name,road_type,is_lit,latitude,longitude,length_meters
+SEG_001,Connaught Circus Inner Circle,primary,true,28.6315,77.2167,350.0
+SEG_002,Barakhamba Road,primary,true,28.6290,77.2250,520.0
+SEG_003,Janpath Road,secondary,true,28.6240,77.2185,410.0
+SEG_004,Karol Bagh Market Lane,residential,false,28.6510,77.1905,230.0
+SEG_005,Hauz Khas Outer Ring Road,primary,true,28.5494,77.2001,650.0
+SEG_006,Quiet Residential By-lane,residential,false,28.5450,77.1950,180.0
