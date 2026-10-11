@@ -78,12 +78,20 @@ yarn-error.log*
 # Models (large binary files — use Git LFS if needed)
 # -------------------------------------------------------
 models/*.pkl
+models/**/*.pkl
 models/*.joblib
+models/**/*.joblib
 models/*.h5
+models/**/*.h5
 models/*.onnx
+models/**/*.onnx
 models/*.bin
+models/**/*.bin
 models/*.pt
+models/**/*.pt
 models/*.pth
+models/**/*.pth
+*.joblib
 
 # -------------------------------------------------------
 # Datasets (raw data — may be large)

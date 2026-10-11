@@ -30,7 +30,7 @@
 | 10 | A\* Routing Engine | ✅ COMPLETE | Multi-objective cost function |
 | 11 | Crime Data Ingestion | ✅ COMPLETE | Modular pipeline, validation, geocoding, PostGIS |
 | 12 | Spatial/Temporal Feature Pipeline | ✅ COMPLETE | Metric KDE, anti-leakage, temporal features |
-| 13 | Random Forest Baseline | ⬜ NOT STARTED | |
+| 13 | Random Forest Baseline | ✅ COMPLETE | scikit-learn RF, anti-leakage, baseline comparison |
 | 14 | XGBoost Model | ⬜ NOT STARTED | |
 | 15 | SHAP Explainability | ⬜ NOT STARTED | |
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
@@ -281,6 +281,25 @@ None.
 
 ---
 
+## Milestone 13 — Random Forest Baseline Model
+
+**Status:** ✅ COMPLETE  
+**Goal:** Build a reproducible Random Forest training and evaluation pipeline using scikit-learn, with anti-leakage guards, class imbalance handling, naive baseline comparison, and artifact serialization compatible with `ml-service`.
+
+### Completed Tasks
+
+- [x] Training configuration and evaluation metrics schemas (`scripts/model_training/schemas.py`) matching `FEATURE_NAMES`
+- [x] Random Forest trainer with chronological anti-leakage partition, train-only scaler fitting, and class imbalance handling (`scripts/model_training/trainer.py`)
+- [x] Evaluation against naive baseline (`DummyClassifier` / `DummyRegressor`) with full metric suite
+- [x] Production model artifact serialization (`model.joblib`, `scaler.joblib`, `feature_names.json`, `metadata.json`) in `models/random_forest/`
+- [x] Verified full compatibility with `ml-service` `ModelService` inference and prediction schemas
+- [x] CLI entry point supporting dry-run, classification, and regression (`scripts/train_random_forest.py`)
+- [x] Synthetic training fixture (`scripts/fixtures/mock_training_dataset.csv` with `# DEMO DATA - SYNTHETIC TRAINING FIXTURE`)
+- [x] Dedicated unit and integration tests (`scripts/tests/test_random_forest_training.py`) — all 4 tests passing (total 31 workspace tests passing)
+- [x] Technical documentation (`docs/random-forest-baseline.md`)
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -297,6 +316,9 @@ None.
 | 2026-10-11 | Metric projection EPSG:3857 for KDE | Ensures distance calculations (500m, 1km, sigma) represent ground meters accurately |
 | 2026-10-11 | Temporal masking (incident_datetime < query_time) | Strictly prevents future crime data from leaking into past evaluation features |
 | 2026-10-11 | Point-level KDE isolation | Guarantees coarse records are excluded from continuous point densities |
+| 2026-10-11 | Train-only fitting of MinMaxScaler | Eliminates data leakage into validation and test sets |
+| 2026-10-11 | Class imbalance weighting (balanced) | Accommodates minority high-risk road segment distribution |
+| 2026-10-11 | Explicit synthetic evaluation flagging | Prevents mock fixture test metrics from ever being misrepresented as real-world accuracy |
 
 ---
 
