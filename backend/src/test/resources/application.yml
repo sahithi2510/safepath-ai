@@ -1,0 +1,32 @@
+# Test configuration — uses H2 in-memory DB for unit tests
+# Flyway is disabled in tests; schema managed by test fixtures
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+safepath:
+  jwt:
+    secret: test_jwt_secret_for_testing_only_at_least_32_chars
+    expiration-ms: 3600000
+
+  ml-service:
+    url: http://localhost:8001
+    timeout-ms: 1000
+
+  cors:
+    allowed-origins: http://localhost:3000
+
+  demo-mode: false

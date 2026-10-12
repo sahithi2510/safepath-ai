@@ -8,9 +8,9 @@
 
 ## Current Status
 
-**Overall Progress:** Milestone 1 — Project Foundation (IN PROGRESS)
+**Overall Progress:** Milestone 17 — Spring Boot ↔ ML Integration (COMPLETE)
 
-**Last Updated:** 2026-10-08
+**Last Updated:** 2026-10-12
 
 ---
 
@@ -34,7 +34,7 @@
 | 14 | XGBoost Model | ✅ COMPLETE | XGBoost model, anti-leakage, baseline comparison |
 | 15 | SHAP Explainability | ✅ COMPLETE | TreeExplainer, additive reconstruction, non-causal phrasing |
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
-| 17 | Spring Boot ↔ ML Integration | ⬜ NOT STARTED | |
+| 17 | Spring Boot ↔ ML Integration | ✅ COMPLETE | RestClient, 15 features, bounded batching, strict fallback |
 | 18 | Risk-Aware A\* Routing | ⬜ NOT STARTED | |
 | 19 | Route Comparison | ⬜ NOT STARTED | |
 | 20 | Safety Heatmap | ⬜ NOT STARTED | |
@@ -384,6 +384,44 @@ None.
 
 ---
 
+## Milestone 17 — Spring Boot ↔ ML Integration
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement robust Spring Boot client calling the FastAPI ML inference service with typed DTOs, bounded batch chunking, strict fallback policy, and routing integration.
+
+### Deliverables & Verification Checklist
+- [x] Typed DTOs matching exact 15-feature schema in snake_case (`com.safepath.backend.dto.ml`):
+  - `RiskFeaturesDto`: all 15 features (`crime_density_500m`, `crime_density_1km`, `severity_weighted_density`, `recent_crime_density`, `night_crime_density`, `hour_of_day`, `day_of_week`, `lighting_score`, `activity_proxy`, `nearest_police_m`, `nearest_hospital_m`, `nearest_transport_m`, `weather_precipitation`, `weather_visibility`, `verified_report_count`)
+  - `PredictRiskRequestDto`, `PredictRiskResponseDto`, `BatchPredictRequestDto`, `BatchPredictResponseDto`
+  - `MlHealthResponseDto`, `MlExplainRequestDto`, `MlExplainResponseDto`, `FactorContributionDto`
+- [x] Spring 6.1 `RestClient` and configuration (`MlServiceProperties`, `MlServiceConfig`):
+  - Configurable timeouts (`connectTimeoutMs: 3000`, `timeoutMs: 5000`) via `SimpleClientHttpRequestFactory`
+  - Configurable batch size (`maxBatchSize: 500`) and feature flag (`enabled: true`)
+  - Environment variable overrides (`ML_SERVICE_URL`, `ML_SERVICE_TIMEOUT_MS`, `ML_SERVICE_CONNECT_TIMEOUT_MS`, `ML_SERVICE_MAX_BATCH_SIZE`, `ML_SERVICE_ENABLED`)
+- [x] Robust ML Client implementation (`MlServiceClientImpl`):
+  - Single segment prediction (`/predict-risk`)
+  - Batch segment prediction (`/predict-risk/batch`) with bounded chunking ($\le 500$ segments)
+  - Segment ID-based response mapping (protecting against out-of-order response arrays)
+  - SHAP explanations (`/explain`) and health checks (`/health`)
+  - Explicit error handling: `MlServiceUnavailableException` (503 / connection failure / timeouts), `MlServiceValidationException` (400 / 422), `MlServiceException` (500)
+- [x] Road segment feature extractor (`RoadSegmentFeatureService`):
+  - Extracts 15 features from `RoadSegment` entities and evaluation timestamps
+  - Derives lighting score proxy (1.0 lit, 0.0 unlit, null fallback) and activity proxy from road types
+  - Prepares batch prediction requests with deterministic segment identifiers
+- [x] Safe fallback & route planning integration (`AStarRoutingEngine`, `RouteService`):
+  - `SAFEST`: strictly throws `MlServiceUnavailableException` when ML is down (never falsely claims an unscored route is safest)
+  - `FASTEST`: operates independently of ML when unavailable ($\alpha=0.8, \beta=0.2, \gamma=0.0$), marked `isMlScored = false` and `riskLevel = "UNSCORED"`
+  - `BALANCED`: falls back to non-ML edge weights with explicit `UNSCORED` annotations
+  - Length-weighted aggregate route safety score ($[0, 100]$) and risk level categorization
+  - Propagation of `is_synthetic_demonstration`, `modelVersion`, and evaluation limitations
+- [x] Automated test suites:
+  - Spring Boot backend: **27 passed out of 27 tests** (`MlServiceClientTest`, `RoadSegmentFeatureServiceTest`, `AStarRoutingEngineTest`, `RouteServiceMlIntegrationTest`, `MlServicePropertiesTest`, `SafePathBackendApplicationTests`)
+  - Python / FastAPI: **62 passed out of 62 tests**
+  - Total workspace: **89 passed tests**, 0 failures, 0 regressions
+- [x] Comprehensive documentation (`docs/spring-boot-ml-integration.md`) and `.env.example` updates
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -413,6 +451,11 @@ None.
 | 2026-10-12 | Maximum batch size limit (500 segments) | Protects ML service from memory saturation during A* routing graph expansion |
 | 2026-10-12 | Explicit imputed_features tracking | Transparently reports to callers whenever default substitutions occurred |
 | 2026-10-12 | Global exception sanitization | Eliminates risk of leaking stack traces, local paths, or secrets to API clients |
+| 2026-10-12 | RestClient with SimpleClientHttpRequestFactory | Bounded connect (3s) and read (5s) timeouts protect Spring Boot threads |
+| 2026-10-12 | Segment ID-Keyed Map Lookup | Eliminates reliance on array indices and guards against out-of-order predictions |
+| 2026-10-12 | Strict Rejection Fallback for SAFEST mode | Prevents unverified or unscored paths from ever being falsely labeled safest |
+| 2026-10-12 | Independent Travel-Time Routing for FASTEST mode | Allows travel-time optimization to proceed without ML service dependency |
+| 2026-10-12 | Client-Side Batch Chunking (<= 500 segments) | Transparently splits large network queries into server-safe payload chunks |
 
 
 

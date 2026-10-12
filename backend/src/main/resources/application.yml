@@ -1,0 +1,150 @@
+# ============================================================
+# SafePath AI — Application Configuration
+# ============================================================
+# All secrets are read from environment variables.
+# Do NOT hardcode credentials here.
+# ============================================================
+
+spring:
+  application:
+    name: safepath-backend
+
+  # ----------------------------------------------------------
+  # Database
+  # ----------------------------------------------------------
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:safepath_db}}
+    username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:safepath_user}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD}}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # ----------------------------------------------------------
+  # JPA / Hibernate
+  # ----------------------------------------------------------
+  jpa:
+    database-platform: org.hibernate.spatial.dialect.postgis.PostgisPG10Dialect
+    hibernate:
+      ddl-auto: validate   # Flyway manages schema — never let Hibernate auto-create
+    show-sql: false          # Set to true for debugging; never in production
+    open-in-view: false      # Disable OSIV for clean service layer
+
+  # ----------------------------------------------------------
+  # Flyway
+  # ----------------------------------------------------------
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+  # ----------------------------------------------------------
+  # Jackson
+  # ----------------------------------------------------------
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+# ----------------------------------------------------------
+# Server
+# ----------------------------------------------------------
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never      # Do not expose exception messages
+    include-binding-errors: never
+    include-stacktrace: never   # NEVER expose stack traces
+    include-exception: false
+
+# ----------------------------------------------------------
+# Actuator
+# ----------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: SafePath AI Backend
+    version: 0.0.1-SNAPSHOT
+    description: AI-Powered Women Safety Route Planner
+
+# ----------------------------------------------------------
+# Application-Specific Configuration
+# ----------------------------------------------------------
+safepath:
+
+  # JWT
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+  # ML Service
+  ml-service:
+    url: ${ML_SERVICE_URL:http://localhost:8001}
+    timeout-ms: ${ML_SERVICE_TIMEOUT_MS:5000}
+    connect-timeout-ms: ${ML_SERVICE_CONNECT_TIMEOUT_MS:3000}
+    max-batch-size: ${ML_SERVICE_MAX_BATCH_SIZE:500}
+    enabled: ${ML_SERVICE_ENABLED:true}
+
+  # CORS
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8081}
+
+  # Route Weights (Implementation Choices — see docs/routing.md)
+  routing:
+    weights:
+      fastest:
+        alpha: 0.7    # time weight
+        beta: 0.2     # distance weight
+        gamma: 0.1    # risk weight
+      balanced:
+        alpha: 0.3
+        beta: 0.2
+        gamma: 0.5
+      safest:
+        alpha: 0.1
+        beta: 0.1
+        gamma: 0.8
+
+  # Safety Score Thresholds (Application-defined — see docs/limitations.md)
+  safety:
+    thresholds:
+      very-unsafe: 0.2
+      unsafe: 0.4
+      moderate: 0.6
+      safe: 0.8
+      # above 0.8 = very-safe
+
+  # Demo mode flag
+  demo-mode: ${DEMO_MODE:false}
+
+# ----------------------------------------------------------
+# Logging
+# ----------------------------------------------------------
+logging:
+  level:
+    root: INFO
+    com.safepath: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

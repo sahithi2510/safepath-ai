@@ -19,6 +19,7 @@ secrets/
 # -------------------------------------------------------
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
+backend/.mvn/wrapper/apache-maven-*/
 backend/*.class
 backend/*.jar
 backend/*.war
