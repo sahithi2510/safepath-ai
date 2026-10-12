@@ -74,6 +74,31 @@ class TrainingConfig:
 
 
 @dataclass
+class XGBoostConfig:
+    """Hyperparameter and partition configuration for XGBoost training."""
+
+    model_type: str = "xgboost"
+    task_type: str = "classifier"  # "classifier" or "regressor"
+    n_estimators: int = 100
+    max_depth: int = 4
+    learning_rate: float = 0.05
+    subsample: float = 0.8
+    colsample_bytree: float = 0.8
+    scale_pos_weight: Optional[float] = None  # Auto-computed from y_train class imbalance if None
+    random_state: int = 42
+
+    # Chronological partition ratios
+    train_ratio: float = 0.70
+    val_ratio: float = 0.15
+    test_ratio: float = 0.15
+
+    # Column mappings
+    target_column: str = "risk_label"
+    continuous_target_column: str = "target_risk"
+    time_column: str = "snapshot_time"
+
+
+@dataclass
 class EvaluationMetrics:
     """Metrics container tracking test performance and dataset provenance."""
 
@@ -112,4 +137,28 @@ class EvaluationMetrics:
             "baseline_metrics": self.baseline_metrics,
             "feature_importances": self.feature_importances,
             "notes": self.notes,
+        }
+
+
+@dataclass
+class ModelComparison:
+    """Side-by-side comparison of XGBoost vs Random Forest vs Naive Baseline on identical splits."""
+
+    xgb_metrics: EvaluationMetrics
+    rf_metrics: EvaluationMetrics
+    baseline_metrics: Dict[str, Any]
+    task_type: str
+    is_synthetic: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "task_type": self.task_type,
+            "is_synthetic": self.is_synthetic,
+            "xgboost": self.xgb_metrics.metrics,
+            "random_forest": self.rf_metrics.metrics,
+            "naive_baseline": self.baseline_metrics,
+            "feature_importances": {
+                "xgboost": self.xgb_metrics.feature_importances,
+                "random_forest": self.rf_metrics.feature_importances,
+            },
         }

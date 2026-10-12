@@ -31,7 +31,7 @@
 | 11 | Crime Data Ingestion | ✅ COMPLETE | Modular pipeline, validation, geocoding, PostGIS |
 | 12 | Spatial/Temporal Feature Pipeline | ✅ COMPLETE | Metric KDE, anti-leakage, temporal features |
 | 13 | Random Forest Baseline | ✅ COMPLETE | scikit-learn RF, anti-leakage, baseline comparison |
-| 14 | XGBoost Model | ⬜ NOT STARTED | |
+| 14 | XGBoost Model | ✅ COMPLETE | XGBoost model, anti-leakage, baseline comparison |
 | 15 | SHAP Explainability | ⬜ NOT STARTED | |
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
 | 17 | Spring Boot ↔ ML Integration | ⬜ NOT STARTED | |
@@ -300,6 +300,27 @@ None.
 
 ---
 
+## Milestone 14 — XGBoost Model
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement a reproducible XGBoost model with configurable hyperparameters, class imbalance handling, chronological train/val/test evaluation, fair comparison against Random Forest and Naive baselines, and artifact serialization.
+
+### Completed Tasks
+
+- [x] XGBoost configuration and comparison data schemas (`scripts/model_training/schemas.py`)
+- [x] XGBoost trainer supporting classification and regression with train-only `MinMaxScaler` fitting (`scripts/model_training/xgboost_trainer.py`)
+- [x] Dynamic and configurable class imbalance handling via `scale_pos_weight` ($N_{\text{neg}} / N_{\text{pos}}$)
+- [x] Fair 3-way evaluation (`compare_with_baselines`) comparing XGBoost against Random Forest and Naive baselines on identical chronological partitions
+- [x] Production model artifact serialization (`models/xgboost/`) containing `model.joblib`, `scaler.joblib`, `feature_names.json`, and `metadata.json`
+- [x] Verification that existing Random Forest artifacts in `models/random_forest/` remain intact and unmutated
+- [x] Verified full compatibility with `ml-service` `ModelService` (XGBoost prioritized with automatic fallback)
+- [x] CLI entry point supporting single model training, 3-way comparison, regression, and dry-run (`scripts/train_xgboost.py`)
+- [x] Comprehensive test suite (`scripts/tests/test_xgboost_training.py`) covering training, seed reproducibility, anti-leakage guards, class imbalance, serialization, and fair baseline comparison — 7 new tests passing (total 38 workspace tests passing)
+- [x] Technical specification and evaluation report (`docs/xgboost-model.md`)
+- [x] Strict data integrity compliance: synthetic fixtures explicitly tagged as software pipeline checks, not real-world predictive accuracy
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -319,6 +340,10 @@ None.
 | 2026-10-11 | Train-only fitting of MinMaxScaler | Eliminates data leakage into validation and test sets |
 | 2026-10-11 | Class imbalance weighting (balanced) | Accommodates minority high-risk road segment distribution |
 | 2026-10-11 | Explicit synthetic evaluation flagging | Prevents mock fixture test metrics from ever being misrepresented as real-world accuracy |
+| 2026-10-12 | XGBoost scale_pos_weight calculation | Balances gradient updates across minority positive crime risk instances |
+| 2026-10-12 | Separate models/xgboost artifact directory | Preserves baseline model artifacts for fair comparative benchmarking |
+| 2026-10-12 | Unified 3-way baseline comparison | Guarantees identical data partitions when comparing XGBoost, Random Forest, and Naive baselines |
+
 
 ---
 
