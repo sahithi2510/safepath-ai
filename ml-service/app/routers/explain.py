@@ -4,15 +4,18 @@ from app.models.schemas import ExplainRequest, ExplainResponse
 
 router = APIRouter(prefix="/explain", tags=["Explainability"])
 
-@router.post("/", response_model=ExplainResponse)
+
+@router.post("", response_model=ExplainResponse)
+@router.post("/", response_model=ExplainResponse, include_in_schema=False)
 async def explain_risk(payload: ExplainRequest, request: Request):
     """
     Provide SHAP-based feature attributions for a given segment's risk score.
-    Helps understand *why* a road segment was classified with a specific risk.
+    Helps understand why a road segment received a specific model prediction.
+    Features describe statistical correlations in training distributions, not physical causation.
     """
-    model_service = request.app.state.model_service
+    model_service = getattr(request.app.state, "model_service", None)
     
-    if not model_service.is_ready():
+    if not model_service or not model_service.is_ready():
         raise HTTPException(
             status_code=503, 
             detail="ML Models are not yet trained or loaded."

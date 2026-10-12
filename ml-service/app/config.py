@@ -2,7 +2,7 @@
 SafePath AI ML Service — Configuration
 All settings read from environment variables with safe defaults.
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -14,9 +14,14 @@ class Settings(BaseSettings):
     # Which model to use for inference (xgboost or random_forest)
     active_model: str = "xgboost"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    # Maximum batch size for predict-risk/batch endpoint
+    max_batch_size: int = 500
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 
 settings = Settings()

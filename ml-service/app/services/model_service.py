@@ -60,8 +60,9 @@ class ModelService:
     prediction endpoints return 503.
     """
 
-    def __init__(self, model_dir: str):
+    def __init__(self, model_dir: str, default_model: str = "xgboost"):
         self.model_dir = Path(model_dir)
+        self.default_model = default_model
         self.model = None
         self.explainer = None
         self.preprocessor: Optional[Preprocessor] = None
@@ -69,8 +70,11 @@ class ModelService:
         self.model_type: Optional[str] = None
 
     def load(self) -> None:
-        """Try to load XGBoost model first, then Random Forest as fallback."""
-        for model_type in ["xgboost", "random_forest"]:
+        """Try to load preferred model first, then fallback to other supported models."""
+        candidate_models = [self.default_model] + [
+            m for m in ["xgboost", "random_forest"] if m != self.default_model
+        ]
+        for model_type in candidate_models:
             model_path = self.model_dir / model_type / "model.joblib"
             scaler_path = self.model_dir / model_type / "scaler.joblib"
             meta_path = self.model_dir / model_type / "metadata.json"
@@ -117,19 +121,38 @@ class ModelService:
         return self.explainer is not None
 
     def predict(self, segment_id: str, features: RiskFeatures) -> PredictRiskResponse:
-        """Predict risk for a single segment."""
-        arr, completeness = self.preprocessor.transform(features)
-        risk_score = float(self._predict_raw(arr)[0])
+        """Predict relative risk for a single segment."""
+        arr, completeness, imputed = self.preprocessor.transform(features)
+
+        is_xgb = (self.model_type == "xgboost") or hasattr(self.model, "get_booster")
+        if hasattr(self.model, "predict_proba"):
+            if is_xgb and hasattr(self.model, "predict"):
+                # Raw decision margin before logistic sigmoid
+                raw_output = float(self.model.predict(arr, output_margin=True)[0])
+                risk_score = float(1.0 / (1.0 + np.exp(-raw_output)))
+            else:
+                prob = float(self.model.predict_proba(arr)[:, 1][0])
+                raw_output = prob
+                risk_score = prob
+        else:
+            raw_output = float(self.model.predict(arr)[0])
+            risk_score = max(0.0, min(1.0, raw_output))
+
         risk_score = max(0.0, min(1.0, risk_score))
+        safety_score = round(1.0 - risk_score, 4)
 
         return PredictRiskResponse(
             segment_id=segment_id,
-            risk_score=risk_score,
-            safety_score=round(1.0 - risk_score, 4),
+            raw_model_output=round(raw_output, 4),
+            risk_score=round(risk_score, 4),
+            safety_score=safety_score,
             risk_level=risk_to_level(risk_score),
+            model_type=self.model_type or "unknown",
             model_version=self.metadata.get("version", "unknown"),
             model_trained_at=self.metadata.get("trained_at"),
             feature_completeness=round(completeness, 3),
+            imputed_features=imputed,
+            is_synthetic_demonstration=self.metadata.get("is_synthetic_evaluation", True),
             demo=False,
         )
 
@@ -142,20 +165,17 @@ class ModelService:
 
     def explain(self, segment_id: str, features: RiskFeatures) -> ExplainResponse:
         """Generate SHAP explanation for a single segment."""
-        arr, _ = self.preprocessor.transform(features)
+        arr, completeness, imputed = self.preprocessor.transform(features)
         is_xgb = (self.model_type == "xgboost") or hasattr(self.model, "get_booster")
 
         if hasattr(self.model, "predict_proba"):
-            if is_xgb:
-                # XGBoost default margin output
+            if is_xgb and hasattr(self.model, "predict"):
                 model_output = float(self.model.predict(arr, output_margin=True)[0])
                 risk_score = float(1.0 / (1.0 + np.exp(-model_output)))
             else:
-                # Random Forest / sklearn
                 risk_score = float(self.model.predict_proba(arr)[:, 1][0])
                 model_output = risk_score
         else:
-            # Regressor
             pred = float(self.model.predict(arr)[0])
             risk_score = max(0.0, min(1.0, pred))
             model_output = pred
@@ -186,19 +206,26 @@ class ModelService:
 
         # Verification of additive efficiency
         sum_phi = float(np.sum(sv))
-        reconstruction_error = abs((base_value + sum_phi) - model_output)
+        reconstruction_error = float(abs((base_value + sum_phi) - model_output))
         reconstruction_valid = reconstruction_error <= 1e-4
 
         factors = []
+        feature_dict = features.model_dump()
         feature_values = arr[0].tolist()
         for i, name in enumerate(FEATURE_NAMES):
             c_val = float(sv[i])
             if abs(c_val) > 0.001:  # Only include meaningful contributions
+                raw_val = feature_dict.get(name)
+                is_imp = name in imputed
+                direction = "increases_risk" if c_val > 0 else ("decreases_risk" if c_val < 0 else "neutral")
                 factors.append(FactorContribution(
                     name=name,
                     value=round(feature_values[i], 4),
+                    raw_value=round(float(raw_val), 4) if raw_val is not None else None,
                     contribution=round(c_val, 4),
+                    direction=direction,
                     description=self._describe_factor(name, c_val),
+                    is_imputed=is_imp,
                 ))
 
         # Sort by absolute contribution magnitude
@@ -206,14 +233,16 @@ class ModelService:
 
         return ExplainResponse(
             segment_id=segment_id,
+            raw_model_output=round(model_output, 4),
             risk_score=round(risk_score, 4),
             safety_score=safety_score,
             base_risk=round(base_value, 4),
             model_type=self.model_type or "xgboost",
+            model_version=self.metadata.get("version", "unknown"),
             factors=factors[:10],  # Top 10 factors
             reconstruction_valid=reconstruction_valid,
+            reconstruction_error=round(reconstruction_error, 6),
             is_synthetic_demonstration=self.metadata.get("is_synthetic_evaluation", True),
-            model_version=self.metadata.get("version", "unknown"),
         )
 
     def _predict_raw(self, arr: np.ndarray) -> np.ndarray:

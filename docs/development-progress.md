@@ -342,6 +342,48 @@ None.
 
 ---
 
+## Milestone 16 — FastAPI ML Service
+
+**Status:** ✅ COMPLETE  
+**Goal:** Deliver a production-quality, low-latency FastAPI inference service providing road-segment risk predictions, batch routing evaluation, and SHAP explanations with strict input validation, batch limits, and security guards.
+
+### Completed Tasks
+
+- [x] Enhanced Pydantic v2 data models (`ml-service/app/models/schemas.py`) with strict validation:
+  - Enforced `allow_inf_nan=False` to reject non-finite inputs (`NaN`, `+Inf`, `-Inf`) with HTTP 422
+  - Enforced `extra="forbid"` to reject unsupported feature names
+  - Strict domain bound validations (`ge=0.0`, `hour_of_day` in 0..23, `day_of_week` in 0..6, `lighting_score` in 0..1)
+- [x] Preprocessor imputation tracking (`ml-service/app/services/preprocessor.py`):
+  - Returns `(feature_array, feature_completeness, imputed_features)`
+  - Replaced hard-coded assumptions with transparent tracking of which features were imputed
+- [x] Health status endpoint (`GET /health`):
+  - Returns `status: "UP"` when models are loaded and verified
+  - Returns `status: "DEGRADED"` with `models_loaded: false` when models are unready, without crashing the daemon
+  - Exposes active model architecture, model version, and synthetic training data flag
+- [x] Road-segment risk prediction endpoints:
+  - Primary endpoint `POST /predict-risk` and alias `POST /predict/single`
+  - Distinguishes raw model output, predicted relative risk score in [0, 1], and application safety score (1 - risk)
+  - Categorizes segments into application-defined risk categories (`VERY_LOW`, `LOW`, `MODERATE`, `HIGH`, `VERY_HIGH`)
+- [x] Batch prediction endpoints (`POST /predict-risk/batch` and `POST /predict/batch`):
+  - Enforces sensible input limits: minimum 1 segment, maximum 500 segments
+  - Rejects empty batches and batches exceeding limits with structured HTTP 400 Bad Request
+- [x] SHAP explanation endpoints (`POST /explain` and `POST /explain/`):
+  - Computes additive feature attributions with TreeExplainer
+  - Enforces non-causal associative phrasing ("associates with higher/lower model predicted risk")
+  - Exposes synthetic evaluation flag and academic disclaimers
+- [x] Production security and information disclosure guards:
+  - Global FastAPI exception handlers intercepting `RequestValidationError`, `HTTPException`, and generic `Exception`
+  - Strictly prevents leaking Python tracebacks, local absolute directory paths, or sensitive credentials in HTTP responses
+- [x] Developer usability & configuration:
+  - Created `ml-service/.env.example` and updated root `.env.example`
+  - In-memory model caching via FastAPI `lifespan` context manager
+- [x] Comprehensive automated test suite (`ml-service/tests/test_api.py`):
+  - 15 unit and integration tests covering health, single prediction, batch prediction, bounds, non-finite rejection, extra fields, empty inputs, batch limits, SHAP, and information security
+  - Full workspace test suite passing cleanly: **62 passed out of 62 tests**
+- [x] Technical API documentation (`docs/fastapi-ml-service.md`)
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -367,6 +409,10 @@ None.
 | 2026-10-12 | TreeExplainer additive reconstruction test | Numerically guarantees efficiency property holds within 1e-4 tolerance |
 | 2026-10-12 | Non-causal associative phrasing convention | Prevents misleading users by distinguishing statistical correlation from physical causality |
 | 2026-10-12 | Three-tier score taxonomy | Distinguishes raw tree margin, calibrated risk score, and user safety score (1 - risk) |
+| 2026-10-12 | Pydantic allow_inf_nan=False and extra="forbid" | Prevents non-finite floats and unexpected keys from corrupting ML preprocessing |
+| 2026-10-12 | Maximum batch size limit (500 segments) | Protects ML service from memory saturation during A* routing graph expansion |
+| 2026-10-12 | Explicit imputed_features tracking | Transparently reports to callers whenever default substitutions occurred |
+| 2026-10-12 | Global exception sanitization | Eliminates risk of leaking stack traces, local paths, or secrets to API clients |
 
 
 

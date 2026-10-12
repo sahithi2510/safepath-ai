@@ -87,39 +87,44 @@ class Preprocessor:
                 scaler_path
             )
 
-    def transform(self, features: RiskFeatures) -> Tuple[np.ndarray, float]:
+    def transform(self, features: RiskFeatures) -> Tuple[np.ndarray, float, List[str]]:
         """
         Transform features into a model-ready numpy array.
 
         Returns:
-            (feature_array, feature_completeness)
+            (feature_array, feature_completeness, imputed_features)
             feature_completeness: fraction of features that were present (not imputed)
+            imputed_features: list of feature names imputed with documented defaults
         """
         feature_dict = features.model_dump()
         present_count = sum(1 for v in feature_dict.values() if v is not None)
         completeness = present_count / len(FEATURE_NAMES)
 
-        # Build row in correct order, imputing missing values
+        # Build row in exact feature order, tracking imputed features
         row = []
+        imputed_features = []
         for name in FEATURE_NAMES:
             val = feature_dict.get(name)
             if val is None:
                 val = FEATURE_DEFAULTS[name]
+                imputed_features.append(name)
             row.append(float(val))
 
-        arr = np.array(row).reshape(1, -1)
+        arr = np.array(row, dtype=np.float64).reshape(1, -1)
 
         if self.scaler is not None:
             arr = self.scaler.transform(arr)
 
-        return arr, completeness
+        return arr, completeness, imputed_features
 
-    def transform_batch(self, features_list: list) -> Tuple[np.ndarray, List[float]]:
+    def transform_batch(self, features_list: list) -> Tuple[np.ndarray, List[float], List[List[str]]]:
         """Transform a list of RiskFeatures into a batch array."""
         arrays = []
         completeness_list = []
+        imputed_list = []
         for features in features_list:
-            arr, comp = self.transform(features)
+            arr, comp, imp = self.transform(features)
             arrays.append(arr)
             completeness_list.append(comp)
-        return np.vstack(arrays), completeness_list
+            imputed_list.append(imp)
+        return np.vstack(arrays), completeness_list, imputed_list
