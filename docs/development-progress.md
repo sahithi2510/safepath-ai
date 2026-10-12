@@ -32,7 +32,7 @@
 | 12 | Spatial/Temporal Feature Pipeline | ✅ COMPLETE | Metric KDE, anti-leakage, temporal features |
 | 13 | Random Forest Baseline | ✅ COMPLETE | scikit-learn RF, anti-leakage, baseline comparison |
 | 14 | XGBoost Model | ✅ COMPLETE | XGBoost model, anti-leakage, baseline comparison |
-| 15 | SHAP Explainability | ⬜ NOT STARTED | |
+| 15 | SHAP Explainability | ✅ COMPLETE | TreeExplainer, additive reconstruction, non-causal phrasing |
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
 | 17 | Spring Boot ↔ ML Integration | ⬜ NOT STARTED | |
 | 18 | Risk-Aware A\* Routing | ⬜ NOT STARTED | |
@@ -321,6 +321,27 @@ None.
 
 ---
 
+## Milestone 15 — SHAP Explainability
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement TreeExplainer SHAP explainability for primary XGBoost and baseline Random Forest models, with exact additive reconstruction checks, non-causal phrasing, local/global attribution reports, and API integration.
+
+### Completed Tasks
+
+- [x] SHAP explainability data models (`scripts/explainability/schemas.py`) defining `FeatureContribution`, `LocalExplanation`, and `GlobalExplanation`
+- [x] SHAP explanation engine (`scripts/explainability/shap_engine.py`) with TreeExplainer support for XGBoost and Random Forest
+- [x] Strict additive efficiency verification: verified that $\mathbb{E}[f(X)] + \sum \phi_i = f(x)$ within numerical tolerance ($|\epsilon| \le 10^{-4}$)
+- [x] Strict non-causal phrasing: templates phrase feature contributions associatively ("associates with higher/lower model predicted risk"), strictly preventing causal claims ("poor lighting caused danger")
+- [x] Clear separation between raw model output, predicted relative risk score, and user-facing mapped safety score ($1.0 - \text{risk}$)
+- [x] Robust handling of missing, imputed (`FEATURE_DEFAULTS`), and out-of-range feature inputs
+- [x] CLI entry point for local road-segment explanations and global feature importance ranking (`scripts/explain_model.py`)
+- [x] Enhanced `ml-service` `ModelService.explain()` and Pydantic response schemas (`ExplainResponse`)
+- [x] Unit and API integration test suite (`scripts/tests/test_shap_explainability.py` and `ml-service/tests/test_api.py`) — 12 new/updated tests passing (total 50 workspace tests passing)
+- [x] Technical specification and mathematical verification report (`docs/shap-explainability.md`)
+- [x] Strict data integrity compliance: all explanations labeled as demonstrations when models are trained on synthetic fixtures
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -343,6 +364,10 @@ None.
 | 2026-10-12 | XGBoost scale_pos_weight calculation | Balances gradient updates across minority positive crime risk instances |
 | 2026-10-12 | Separate models/xgboost artifact directory | Preserves baseline model artifacts for fair comparative benchmarking |
 | 2026-10-12 | Unified 3-way baseline comparison | Guarantees identical data partitions when comparing XGBoost, Random Forest, and Naive baselines |
+| 2026-10-12 | TreeExplainer additive reconstruction test | Numerically guarantees efficiency property holds within 1e-4 tolerance |
+| 2026-10-12 | Non-causal associative phrasing convention | Prevents misleading users by distinguishing statistical correlation from physical causality |
+| 2026-10-12 | Three-tier score taxonomy | Distinguishes raw tree margin, calibrated risk score, and user safety score (1 - risk) |
+
 
 
 ---
