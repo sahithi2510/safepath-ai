@@ -1,34 +1,84 @@
 package com.safepath.backend.service.routing;
 
+import com.safepath.backend.config.RoutingProperties;
 import com.safepath.backend.entity.RoadSegment;
 import com.safepath.backend.entity.RoutePreference;
+import com.safepath.backend.exception.NoRouteFoundException;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+/**
+ * Multi-objective Risk-Aware A* Routing Engine for pedestrian pathfinding.
+ *
+ * Cost Function:
+ *   cost = alpha * normalized_time + beta * normalized_distance + gamma * normalized_risk
+ * where alpha + beta + gamma = 1.0 (non-negative weights).
+ *
+ * Normalization Scales (Implementation Choices):
+ *   normalized_time     = walk_time_seconds / 3600.0 (transit duration in hours)
+ *   normalized_distance = length_meters / 10000.0 (transit distance in 10-km units)
+ *   normalized_risk     = uncalibrated relative risk score in [0.0, 1.0]
+ *
+ * Heuristic Admissibility:
+ *   SafePath AI employs a formally admissible zero heuristic (h(n) = 0.0), reducing
+ *   A* to Dijkstra's algorithm. Because edge costs integrate heterogeneous, dimensionless
+ *   time, distance, and uncalibrated risk metrics, Euclidean distance cannot guarantee
+ *   underestimation of total multi-objective cost. The zero heuristic guarantees optimal,
+ *   monotonic path discovery without heuristic overestimation.
+ */
 @Service
 public class AStarRoutingEngine {
+
+    @Getter
+    @Setter
+    private RoutingProperties routingProperties;
+
+    @Autowired(required = false)
+    public AStarRoutingEngine(RoutingProperties routingProperties) {
+        this.routingProperties = (routingProperties != null) ? routingProperties : new RoutingProperties();
+    }
+
+    public AStarRoutingEngine() {
+        this(new RoutingProperties());
+    }
 
     @Data
     @Builder
     public static class Node implements Comparable<Node> {
         private Long id;
-        private double gScore; // cost from start
-        private double fScore; // estimated total cost to end (gScore + heuristic)
+        private double gScore; // exact accumulated cost from start
+        private double fScore; // estimated total cost to destination (gScore + heuristic)
         private Node parent;
         private RoadSegment incomingSegment;
 
         @Override
         public int compareTo(Node other) {
-            return Double.compare(this.fScore, other.fScore);
+            int cmp = Double.compare(this.fScore, other.fScore);
+            if (cmp != 0) {
+                return cmp;
+            }
+            // Deterministic tie-breaking:
+            // 1) Prefer node with lower gScore (deeper progress towards goal)
+            int gCmp = Double.compare(this.gScore, other.gScore);
+            if (gCmp != 0) {
+                return gCmp;
+            }
+            // 2) Deterministic tie-break by unique node identifier
+            if (this.id != null && other.id != null) {
+                return Long.compare(this.id, other.id);
+            }
+            return 0;
         }
     }
 
     /**
      * Implements multi-objective A* routing based on user preference using default/fallback risk scores.
-     * Cost = alpha * normalized_time + beta * normalized_distance + gamma * normalized_risk
      */
     public List<RoadSegment> findRoute(
             Long startNodeId, 
@@ -47,6 +97,7 @@ public class AStarRoutingEngine {
      * @param graph                local walkable road network graph
      * @param riskScoresBySegment  ML-predicted relative risk scores in [0.0, 1.0] keyed by segment ID
      * @return sequence of road segments constituting the optimal route
+     * @throws NoRouteFoundException if destination is unreachable or graph is disconnected
      */
     public List<RoadSegment> findRoute(
             Long startNodeId, 
@@ -54,9 +105,23 @@ public class AStarRoutingEngine {
             RoutePreference preference, 
             Map<Long, List<RoadSegment>> graph,
             Map<String, Double> riskScoresBySegment) {
-        
+
+        if (startNodeId == null || endNodeId == null) {
+            throw new IllegalArgumentException("Start node and end node IDs cannot be null");
+        }
+
+        // Trivial path: start and destination are the exact same network node
+        if (startNodeId.equals(endNodeId)) {
+            return Collections.emptyList();
+        }
+
+        if (graph == null || graph.isEmpty()) {
+            throw new NoRouteFoundException("Graph is empty or unpopulated; cannot route between nodes " + startNodeId + " and " + endNodeId);
+        }
+
         PriorityQueue<Node> openSet = new PriorityQueue<>();
         Map<Long, Node> allNodes = new HashMap<>();
+        Set<Long> closedSet = new HashSet<>();
 
         Node startNode = Node.builder()
                 .id(startNodeId)
@@ -70,44 +135,63 @@ public class AStarRoutingEngine {
         while (!openSet.isEmpty()) {
             Node current = openSet.poll();
 
+            // Destination reached with optimal cost
             if (current.getId().equals(endNodeId)) {
                 return reconstructPath(current);
             }
 
+            // Skip node if already closed/settled with optimal cost
+            if (closedSet.contains(current.getId())) {
+                continue;
+            }
+            closedSet.add(current.getId());
+
             List<RoadSegment> neighbors = graph.getOrDefault(current.getId(), Collections.emptyList());
             for (RoadSegment segment : neighbors) {
-                // Determine direction and target node
-                Long neighborId = segment.getStartNodeId().equals(current.getId()) ? segment.getEndNodeId() : segment.getStartNodeId();
-
-                // Skip if one-way and going the wrong way
-                if (segment.getIsOneway() && !segment.getStartNodeId().equals(current.getId())) {
+                if (segment == null) {
                     continue;
                 }
 
-                double cost = calculateCost(segment, preference, riskScoresBySegment);
-                double tentativeGScore = current.getGScore() + cost;
+                // Determine direction and target neighbor node
+                Long neighborId;
+                if (segment.getStartNodeId().equals(current.getId())) {
+                    neighborId = segment.getEndNodeId();
+                } else if (segment.getEndNodeId().equals(current.getId())) {
+                    neighborId = segment.getStartNodeId();
+                } else {
+                    continue; // Segment is not connected to current node
+                }
 
-                Node neighbor = allNodes.getOrDefault(neighborId, Node.builder().id(neighborId).gScore(Double.POSITIVE_INFINITY).build());
+                // Skip if one-way and traversing in reverse direction
+                if (Boolean.TRUE.equals(segment.getIsOneway()) && !segment.getStartNodeId().equals(current.getId())) {
+                    continue;
+                }
 
-                if (tentativeGScore < neighbor.getGScore()) {
-                    neighbor.setParent(current);
-                    neighbor.setIncomingSegment(segment);
-                    neighbor.setGScore(tentativeGScore);
-                    neighbor.setFScore(tentativeGScore + heuristic(neighborId, endNodeId));
+                // Skip if neighbor has already been settled
+                if (closedSet.contains(neighborId)) {
+                    continue;
+                }
 
-                    if (!openSet.contains(neighbor)) {
-                        openSet.add(neighbor);
-                        allNodes.put(neighborId, neighbor);
-                    } else {
-                        // Re-insert to update priority
-                        openSet.remove(neighbor);
-                        openSet.add(neighbor);
-                    }
+                double edgeCost = calculateCost(segment, preference, riskScoresBySegment);
+                double tentativeGScore = current.getGScore() + edgeCost;
+
+                Node neighbor = allNodes.get(neighborId);
+                if (neighbor == null || tentativeGScore < neighbor.getGScore()) {
+                    Node updatedNeighbor = Node.builder()
+                            .id(neighborId)
+                            .parent(current)
+                            .incomingSegment(segment)
+                            .gScore(tentativeGScore)
+                            .fScore(tentativeGScore + heuristic(neighborId, endNodeId))
+                            .build();
+
+                    allNodes.put(neighborId, updatedNeighbor);
+                    openSet.add(updatedNeighbor);
                 }
             }
         }
 
-        throw new RuntimeException("No route found between nodes " + startNodeId + " and " + endNodeId);
+        throw new NoRouteFoundException("No route found between nodes " + startNodeId + " and " + endNodeId);
     }
 
     private List<RoadSegment> reconstructPath(Node current) {
@@ -124,70 +208,84 @@ public class AStarRoutingEngine {
      * Calculates multi-objective edge cost:
      * cost = alpha * normalized_time + beta * normalized_distance + gamma * normalized_risk
      * where alpha + beta + gamma = 1.0.
+     *
+     * Ensures all edge costs are finite and strictly non-negative.
      */
     public double calculateCost(
             RoadSegment segment, 
             RoutePreference preference, 
             Map<String, Double> riskScoresBySegment) {
 
-        double normalizedTime = segment.getEstimatedWalkTimeS() != null 
-                ? segment.getEstimatedWalkTimeS() / 3600.0 
-                : segment.getLengthMeters() / 1.4 / 3600.0;
-        double normalizedDistance = segment.getLengthMeters() / 10000.0; 
+        if (segment == null) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        // 1. Time normalization: walking duration in hours
+        double walkTimeS;
+        if (segment.getEstimatedWalkTimeS() != null && Double.isFinite(segment.getEstimatedWalkTimeS()) && segment.getEstimatedWalkTimeS() >= 0.0) {
+            walkTimeS = segment.getEstimatedWalkTimeS();
+        } else if (segment.getLengthMeters() != null && Double.isFinite(segment.getLengthMeters()) && segment.getLengthMeters() >= 0.0) {
+            walkTimeS = segment.getLengthMeters() / 1.4; // 1.4 m/s pedestrian speed
+        } else {
+            walkTimeS = 0.0;
+        }
+        double normalizedTime = walkTimeS / 3600.0;
+
+        // 2. Distance normalization: length in 10-km units
+        double lengthMeters = (segment.getLengthMeters() != null && Double.isFinite(segment.getLengthMeters()) && segment.getLengthMeters() >= 0.0)
+                ? segment.getLengthMeters()
+                : 0.0;
+        double normalizedDistance = lengthMeters / 10000.0; 
         
-        // Extract normalized risk [0.0, 1.0]
+        // 3. Risk normalization in [0.0, 1.0]
         double normalizedRisk;
         String segmentKey = resolveSegmentKey(segment);
         if (riskScoresBySegment != null && riskScoresBySegment.containsKey(segmentKey)) {
             Double score = riskScoresBySegment.get(segmentKey);
-            normalizedRisk = (score != null) ? Math.max(0.0, Math.min(1.0, score)) : 0.5;
+            if (score != null && Double.isFinite(score)) {
+                normalizedRisk = Math.max(0.0, Math.min(1.0, score));
+            } else {
+                normalizedRisk = 0.5; // Neutral fallback for null or non-finite values
+            }
         } else if (preference == RoutePreference.FASTEST) {
             // In FASTEST mode, risk is not evaluated; use neutral midpoint without asserting safety
             normalizedRisk = 0.5;
         } else {
-            // Missing data fallback: unscored segments are never assumed safe (0.0)
+            // Missing data fallback: unscored segments are never assumed safe (0.0).
+            // Penalize unlit segments (0.7) relative to lit segments (0.4).
             normalizedRisk = (segment.getIsLit() != null && segment.getIsLit()) ? 0.4 : 0.7;
         }
 
-        double alpha, beta, gamma;
+        // 4. Multi-objective weights
+        RoutingProperties.RouteWeights weights = (routingProperties != null)
+                ? routingProperties.getWeightsForPreference(preference)
+                : new RoutingProperties.RouteWeights(0.3, 0.2, 0.5);
 
-        RoutePreference effectivePref = preference != null ? preference : RoutePreference.BALANCED;
-        switch (effectivePref) {
-            case FASTEST:
-                // Prioritize time and distance; risk weight is 0.0 (independent of ML)
-                alpha = 0.8; beta = 0.2; gamma = 0.0;
-                break;
-            case SAFEST:
-                // Prioritize safety and risk minimization over time
-                alpha = 0.1; beta = 0.1; gamma = 0.8;
-                break;
-            case SOLO_TRAVELLER:
-                alpha = 0.15; beta = 0.15; gamma = 0.7;
-                break;
-            case TOURIST:
-                alpha = 0.3; beta = 0.3; gamma = 0.4;
-                break;
-            case ELDERLY:
-                alpha = 0.1; beta = 0.4; gamma = 0.5;
-                break;
-            case STANDARD:
-            case BALANCED:
-            default:
-                alpha = 0.3; beta = 0.2; gamma = 0.5;
-                break;
+        double cost = (weights.getAlpha() * normalizedTime) 
+                    + (weights.getBeta() * normalizedDistance) 
+                    + (weights.getGamma() * normalizedRisk);
+
+        // Guarantee finite and non-negative edge cost
+        if (!Double.isFinite(cost) || cost < 0.0) {
+            return 0.0;
         }
 
-        return (alpha * normalizedTime) + (beta * normalizedDistance) + (gamma * normalizedRisk);
+        return cost;
     }
 
-    private String resolveSegmentKey(RoadSegment segment) {
+    public String resolveSegmentKey(RoadSegment segment) {
         if (segment.getId() != null) {
             return segment.getId().toString();
         }
         return "node-" + segment.getStartNodeId() + "-" + segment.getEndNodeId();
     }
 
-    private double heuristic(Long nodeId, Long targetId) {
+    /**
+     * Formally admissible zero heuristic (h(n) = 0.0).
+     * Guarantees monotonicity, admissibility, and exact shortest-path discovery
+     * under multi-objective non-negative edge costs.
+     */
+    public double heuristic(Long nodeId, Long targetId) {
         return 0.0;
     }
 }

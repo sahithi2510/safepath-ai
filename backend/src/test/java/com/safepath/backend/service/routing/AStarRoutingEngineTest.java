@@ -1,7 +1,9 @@
 package com.safepath.backend.service.routing;
 
+import com.safepath.backend.config.RoutingProperties;
 import com.safepath.backend.entity.RoadSegment;
 import com.safepath.backend.entity.RoutePreference;
+import com.safepath.backend.exception.NoRouteFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,10 +16,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AStarRoutingEngineTest {
 
     private AStarRoutingEngine routingEngine;
+    private RoutingProperties routingProperties;
 
     @BeforeEach
     void setUp() {
-        routingEngine = new AStarRoutingEngine();
+        routingProperties = new RoutingProperties();
+        routingEngine = new AStarRoutingEngine(routingProperties);
     }
 
     /**
@@ -139,6 +143,112 @@ class AStarRoutingEngineTest {
         assertThat(fastestCost).isNotEqualTo(balancedCost);
         assertThat(balancedCost).isNotEqualTo(safestCost);
         assertThat(fastestCost).isLessThan(balancedCost);
+        assertThat(balancedCost).isLessThan(safestCost);
+    }
+
+    @Test
+    @DisplayName("Admissible zero heuristic guarantees non-overestimating monotonic lower bound")
+    void testAdmissibleZeroHeuristic() {
+        // Zero heuristic is formally admissible: 0.0 <= true_remaining_cost for any non-negative edge costs
+        double h1 = routingEngine.heuristic(1L, 4L);
+        double h2 = routingEngine.heuristic(100L, 999L);
+
+        assertThat(h1).isEqualTo(0.0);
+        assertThat(h2).isEqualTo(0.0);
+    }
+
+    @Test
+    @DisplayName("Deterministic tie-breaking produces consistent route when paths have equal costs")
+    void testDeterministicTieBreaking_EqualCostRoutes() {
+        // Two parallel paths between Node 1 and Node 4:
+        // Path A: Node 1 -> Node 2 -> Node 4
+        // Path B: Node 1 -> Node 3 -> Node 4
+        // Both paths have identical length (200m), time (140s), and risk (0.3)
+        UUID id12 = UUID.randomUUID();
+        UUID id24 = UUID.randomUUID();
+        UUID id13 = UUID.randomUUID();
+        UUID id34 = UUID.randomUUID();
+
+        RoadSegment seg12 = createSegment(id12, 1L, 2L, 100.0, 70.0);
+        RoadSegment seg24 = createSegment(id24, 2L, 4L, 100.0, 70.0);
+        RoadSegment seg13 = createSegment(id13, 1L, 3L, 100.0, 70.0);
+        RoadSegment seg34 = createSegment(id34, 3L, 4L, 100.0, 70.0);
+
+        Map<Long, List<RoadSegment>> graph = buildDivergentNetwork(seg12, seg24, seg13, seg34);
+        Map<String, Double> riskScores = Map.of(
+                id12.toString(), 0.3,
+                id24.toString(), 0.3,
+                id13.toString(), 0.3,
+                id34.toString(), 0.3
+        );
+
+        // Run multiple times to verify 100% determinism
+        List<RoadSegment> path1 = routingEngine.findRoute(1L, 4L, RoutePreference.BALANCED, graph, riskScores);
+        List<RoadSegment> path2 = routingEngine.findRoute(1L, 4L, RoutePreference.BALANCED, graph, riskScores);
+
+        assertThat(path1).isNotEmpty();
+        assertThat(path1).hasSize(2);
+        // Both invocations select the exact same path due to node-ID deterministic tie-breaking
+        assertThat(path1.get(0).getEndNodeId()).isEqualTo(path2.get(0).getEndNodeId());
+        // Since Node 2 has smaller ID than Node 3, Path A is deterministically preferred
+        assertThat(path1.get(0).getEndNodeId()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("findRoute handles trivial path when startNodeId equals endNodeId")
+    void testTrivialPath_StartEqualsEnd() {
+        Map<Long, List<RoadSegment>> graph = Map.of(1L, Collections.emptyList());
+
+        List<RoadSegment> route = routingEngine.findRoute(1L, 1L, RoutePreference.BALANCED, graph);
+        assertThat(route).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findRoute avoids infinite loops on cyclic graphs via closedSet settlement")
+    void testCyclicGraph_AvoidsInfiniteLoop() {
+        // Cyclic graph: Node 1 -> Node 2 -> Node 3 -> Node 1, and Node 3 -> Node 4
+        RoadSegment seg12 = createSegment(UUID.randomUUID(), 1L, 2L, 100.0, 70.0);
+        RoadSegment seg23 = createSegment(UUID.randomUUID(), 2L, 3L, 100.0, 70.0);
+        RoadSegment seg31 = createSegment(UUID.randomUUID(), 3L, 1L, 100.0, 70.0);
+        RoadSegment seg34 = createSegment(UUID.randomUUID(), 3L, 4L, 100.0, 70.0);
+
+        Map<Long, List<RoadSegment>> graph = new HashMap<>();
+        graph.put(1L, List.of(seg12));
+        graph.put(2L, List.of(seg23));
+        graph.put(3L, List.of(seg31, seg34));
+        graph.put(4L, Collections.emptyList());
+
+        List<RoadSegment> path = routingEngine.findRoute(1L, 4L, RoutePreference.BALANCED, graph);
+
+        assertThat(path).hasSize(3);
+        assertThat(path.get(0).getStartNodeId()).isEqualTo(1L);
+        assertThat(path.get(1).getStartNodeId()).isEqualTo(2L);
+        assertThat(path.get(2).getStartNodeId()).isEqualTo(3L);
+        assertThat(path.get(2).getEndNodeId()).isEqualTo(4L);
+    }
+
+    @Test
+    @DisplayName("calculateCost safely clamps invalid, negative, or non-finite edge risks")
+    void testCalculateCost_NonFiniteAndOutOfRangeRisks() {
+        UUID segId = UUID.randomUUID();
+        RoadSegment seg = createSegment(segId, 1L, 2L, 100.0, 70.0);
+
+        // Score > 1.0 clamped to 1.0
+        double costHigh = routingEngine.calculateCost(seg, RoutePreference.SAFEST, Map.of(segId.toString(), 2.5));
+        // Score < 0.0 clamped to 0.0
+        double costLow = routingEngine.calculateCost(seg, RoutePreference.SAFEST, Map.of(segId.toString(), -0.5));
+        // NaN defaults to neutral 0.5
+        double costNan = routingEngine.calculateCost(seg, RoutePreference.SAFEST, Map.of(segId.toString(), Double.NaN));
+        // Infinite defaults to neutral 0.5
+        double costInf = routingEngine.calculateCost(seg, RoutePreference.SAFEST, Map.of(segId.toString(), Double.POSITIVE_INFINITY));
+
+        assertThat(Double.isFinite(costHigh)).isTrue();
+        assertThat(Double.isFinite(costLow)).isTrue();
+        assertThat(Double.isFinite(costNan)).isTrue();
+        assertThat(Double.isFinite(costInf)).isTrue();
+
+        assertThat(costHigh).isGreaterThan(costLow);
+        assertThat(costLow).isGreaterThanOrEqualTo(0.0);
     }
 
     @Test
@@ -162,7 +272,7 @@ class AStarRoutingEngineTest {
     }
 
     @Test
-    @DisplayName("findRoute throws exception when no path exists between disconnected nodes")
+    @DisplayName("findRoute throws NoRouteFoundException when destination is unreachable")
     void testFindRoute_DisconnectedNetwork() {
         RoadSegment seg12 = createSegment(UUID.randomUUID(), 1L, 2L, 100.0, 70.0);
         Map<Long, List<RoadSegment>> graph = Map.of(
@@ -172,7 +282,23 @@ class AStarRoutingEngineTest {
         );
 
         assertThatThrownBy(() -> routingEngine.findRoute(1L, 99L, RoutePreference.FASTEST, graph))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(NoRouteFoundException.class)
                 .hasMessageContaining("No route found between nodes 1 and 99");
+    }
+
+    @Test
+    @DisplayName("findRoute respects oneway road restrictions in reverse direction")
+    void testFindRoute_OnewayRestriction() {
+        RoadSegment onewaySeg = createSegment(UUID.randomUUID(), 1L, 2L, 100.0, 70.0);
+        onewaySeg.setIsOneway(true);
+
+        // In reverse (starting at 2, trying to reach 1)
+        Map<Long, List<RoadSegment>> graph = Map.of(
+                2L, List.of(onewaySeg),
+                1L, Collections.emptyList()
+        );
+
+        assertThatThrownBy(() -> routingEngine.findRoute(2L, 1L, RoutePreference.FASTEST, graph))
+                .isInstanceOf(NoRouteFoundException.class);
     }
 }

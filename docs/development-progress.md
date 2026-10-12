@@ -35,7 +35,7 @@
 | 15 | SHAP Explainability | ✅ COMPLETE | TreeExplainer, additive reconstruction, non-causal phrasing |
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
 | 17 | Spring Boot ↔ ML Integration | ✅ COMPLETE | RestClient, 15 features, bounded batching, strict fallback |
-| 18 | Risk-Aware A\* Routing | ⬜ NOT STARTED | |
+| 18 | Risk-Aware A\* Routing | ✅ COMPLETE | Multi-objective cost, zero heuristic, deterministic tie-breaking |
 | 19 | Route Comparison | ⬜ NOT STARTED | |
 | 20 | Safety Heatmap | ⬜ NOT STARTED | |
 | 21 | Community Reports | ⬜ NOT STARTED | |
@@ -418,7 +418,44 @@ None.
   - Spring Boot backend: **27 passed out of 27 tests** (`MlServiceClientTest`, `RoadSegmentFeatureServiceTest`, `AStarRoutingEngineTest`, `RouteServiceMlIntegrationTest`, `MlServicePropertiesTest`, `SafePathBackendApplicationTests`)
   - Python / FastAPI: **62 passed out of 62 tests**
   - Total workspace: **89 passed tests**, 0 failures, 0 regressions
-- [x] Comprehensive documentation (`docs/spring-boot-ml-integration.md`) and `.env.example` updates
+- [x] Comprehensive automated test suite (`ml-service/tests/test_api.py`):
+  - 15 unit and integration tests covering health, single prediction, batch prediction, bounds, non-finite rejection, extra fields, empty inputs, batch limits, SHAP, and information security
+  - Full workspace test suite passing cleanly: **62 passed out of 62 tests**
+- [x] Technical API documentation (`docs/fastapi-ml-service.md`)
+
+---
+
+## Milestone 18 — Risk-Aware A* Routing
+
+**Status:** ✅ COMPLETE  
+**Goal:** Mathematically verify and implement multi-objective cost function, admissible zero heuristic, deterministic tie-breaking, configurable weights via `RoutingProperties`, finite non-negative bounds, cycle avoidance, and extensive test coverage.
+
+### Deliverables & Verification Checklist
+- [x] Multi-objective edge cost function:
+  - $\text{cost}(e) = \alpha \cdot \text{normalized\_time} + \beta \cdot \text{normalized\_distance} + \gamma \cdot \text{normalized\_risk}$, where $\alpha + \beta + \gamma = 1.0$ and $\text{cost}(e) \ge 0.0$
+  - Guaranteed finite and non-negative bounds across all edges
+  - Clamping and sanitization of out-of-range, negative, null, or non-finite (`NaN`, `Inf`) risk scores
+- [x] Formally admissible zero heuristic ($h(n) = 0.0$):
+  - Formally proves admissibility ($0.0 \le h^*(n)$) and monotonicity across heterogeneous multi-objective cost metrics
+  - Ensures Dijkstra-equivalent optimal path discovery without heuristic overestimation or unfounded spatial assumptions
+- [x] Node settlement & deterministic tie-breaking:
+  - Binary heap priority queue with `Set<Long> closedSet` running in $O((|V| + |E|) \log |V|)$
+  - Completely avoids $O(N)$ priority queue removals and eliminates infinite loops on cyclic networks
+  - Deterministic tie-breaking on `Node`: primary by $f(n)$, secondary by $g(n)$, tertiary by unique `nodeId`
+- [x] Configurable routing weights (`RoutingProperties`):
+  - Profiles for `FASTEST` ($\alpha=0.8, \beta=0.2, \gamma=0.0$), `BALANCED` ($\alpha=0.3, \beta=0.2, \gamma=0.5$), `SAFEST` ($\alpha=0.1, \beta=0.1, \gamma=0.8$), `SOLO_TRAVELLER`, `TOURIST`, and `ELDERLY`
+  - Strict validation: rejects negative, non-finite, or zero-sum weights with `IllegalArgumentException`
+  - Automatic normalization when weight sums deviate from 1.0
+- [x] Edge-case & error handling:
+  - Trivial path handling when start equals destination node (`Collections.emptyList()`)
+  - Explicit `NoRouteFoundException` (HTTP 404) for disconnected graphs and unreachable destinations
+  - One-way road restriction enforcement
+  - Independent travel-time routing for `FASTEST` when ML is unavailable ($\gamma=0.0$)
+- [x] Automated test suites:
+  - Spring Boot backend: **38 passed out of 38 tests** (`AStarRoutingEngineTest`, `RoutingPropertiesTest`, `MlServiceClientTest`, `RoadSegmentFeatureServiceTest`, `RouteServiceMlIntegrationTest`, `MlServicePropertiesTest`, `SafePathBackendApplicationTests`)
+  - Python / FastAPI: **62 passed out of 62 tests**
+  - Total workspace: **100 passed tests**, 0 failures, 0 regressions
+- [x] Comprehensive documentation (`docs/risk-aware-a-star.md`)
 
 ---
 
@@ -456,6 +493,11 @@ None.
 | 2026-10-12 | Strict Rejection Fallback for SAFEST mode | Prevents unverified or unscored paths from ever being falsely labeled safest |
 | 2026-10-12 | Independent Travel-Time Routing for FASTEST mode | Allows travel-time optimization to proceed without ML service dependency |
 | 2026-10-12 | Client-Side Batch Chunking (<= 500 segments) | Transparently splits large network queries into server-safe payload chunks |
+| 2026-10-12 | Formally Admissible Zero Heuristic (h=0) | Guarantees optimal path discovery across dimensionless multi-criteria edge costs |
+| 2026-10-12 | ClosedSet Settlement in PriorityQueue A* | Prevents cycles and reduces worst-case runtime to O((V+E) log V) without O(N) queue operations |
+| 2026-10-12 | Three-tier Deterministic Tie-Breaking (f, g, id) | Ensures 100% reproducible path selection when competing routes have equal total cost |
+| 2026-10-12 | Non-Probabilistic Multi-Criteria Penalty View | Clarifies that edge risk is an uncalibrated relative score, not an additive crime probability |
+| 2026-10-12 | RoutingProperties Weight Validation & Normalization | Prevents negative or non-finite weights from corrupting route search cost |
 
 
 

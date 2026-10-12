@@ -108,13 +108,13 @@ safepath:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8081}
 
-  # Route Weights (Implementation Choices — see docs/routing.md)
+  # Route Weights (Implementation Choices — see docs/risk-aware-a-star.md)
   routing:
     weights:
       fastest:
-        alpha: 0.7    # time weight
+        alpha: 0.8    # time weight
         beta: 0.2     # distance weight
-        gamma: 0.1    # risk weight
+        gamma: 0.0    # risk weight (independent of ML predictions)
       balanced:
         alpha: 0.3
         beta: 0.2
@@ -123,6 +123,18 @@ safepath:
         alpha: 0.1
         beta: 0.1
         gamma: 0.8
+      solo-traveller:
+        alpha: 0.15
+        beta: 0.15
+        gamma: 0.7
+      tourist:
+        alpha: 0.3
+        beta: 0.3
+        gamma: 0.4
+      elderly:
+        alpha: 0.1
+        beta: 0.4
+        gamma: 0.5
 
   # Safety Score Thresholds (Application-defined — see docs/limitations.md)
   safety:
