@@ -37,7 +37,7 @@
 | 17 | Spring Boot ↔ ML Integration | ✅ COMPLETE | RestClient, 15 features, bounded batching, strict fallback |
 | 18 | Risk-Aware A\* Routing | ✅ COMPLETE | Multi-objective cost, zero heuristic, deterministic tie-breaking |
 | 19 | Route Comparison | ✅ COMPLETE | 3-way comparison, duplicate detection, trade-off synthesis, mobile screen |
-| 20 | Safety Heatmap | ⬜ NOT STARTED | |
+| 20 | Safety Heatmap | ✅ COMPLETE | Viewport heatmap API, PostGIS spatial query, bounded batch ML inference, React Native overlay & legend |
 | 21 | Community Reports | ⬜ NOT STARTED | |
 | 22 | Safe Zones | ⬜ NOT STARTED | |
 | 23 | Weather Integration | ⬜ NOT STARTED | |
@@ -505,6 +505,62 @@ None.
 
 ---
 
+## Milestone 20 — Safety Heatmap
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement spatial safety heatmap endpoint and mobile overlay with honest ML risk representation.
+
+### Completed Tasks
+
+- [x] Backend heatmap DTOs (`HeatmapDto`):
+  - Request with bounding box coordinates (`minLat`, `minLon`, `maxLat`, `maxLon`) and optional segment limit
+  - Response with bounding box, segment counts, provenance flags, disclaimer, and road-segment list
+  - Road-segment risks with segmentId, osmId, name, highwayType, EPSG:4326 coordinates, GeoJSON LineString, relativeRiskScore, safetyScore, riskCategory, scoringStatus, colorHex, and lighting attributes
+- [x] Spatial bounding box query (`RoadSegmentRepository`):
+  - `findSegmentsInBoundingBox(Geometry bbox, int limit)` using PostGIS spatial indexing (`ST_Intersects`)
+- [x] Heatmap backend service (`HeatmapService`):
+  - Coordinate range validation: $[-90, 90]$ for latitude, $[-180, 180]$ for longitude, $min \le max$
+  - Viewport span limit: rejects spans exceeding $0.15^\circ$ ($\approx 16.5$ km) with HTTP 400
+  - Limit clamping: bounds limits to $[1, 1000]$ (default 500)
+  - Single-batch ML feature extraction and inference via FastAPI client (`/predict-risk/batch`)
+  - Risk categorization & color mapping:
+    - `VERY_LOW` / `LOW` ($S \ge 60$): `#34C759` (Vibrant green)
+    - `MODERATE` ($40 \le S < 60$): `#FF9500` (Amber)
+    - `HIGH` ($20 \le S < 40$): `#FF3B30` (Red)
+    - `VERY_HIGH` ($S < 20$): `#D70015` (Dark crimson)
+    - `UNSCORED` / `UNAVAILABLE`: `#8E8E93` (Slate gray)
+  - Graceful degradation: when ML service is offline or unreachable, returns segments as `UNAVAILABLE` with `#8E8E93` without throwing 500 or fabricating safety
+  - Missing data honesty: streets without observations are marked `UNSCORED` and never defaulted to safe or low-risk values
+  - Clear synthetic demonstration flag (`isSyntheticDemonstration: true`) and non-probabilistic disclaimers
+- [x] Heatmap REST controller (`HeatmapController`):
+  - `GET /api/heatmap`: primary spatial heatmap endpoint
+  - `GET /api/routes/heatmap`: alias endpoint for routing context
+- [x] Mobile heatmap service & client (`mobile/services/heatmap.ts`):
+  - Strong TypeScript interfaces matching backend DTOs
+  - `fetchHeatmap(params)` API client method
+- [x] Mobile map visualization (`mobile/app/(tabs)/index.tsx`):
+  - Prominent header switch: `🔥 Heatmap: ON / ⚪ Heatmap: OFF` with accessibility role `switch`
+  - Viewport-based debounced querying (600ms debounce on region change)
+  - Viewport span warning when user zooms out past $0.14^\circ$, with one-tap "Zoom to Bangalore" button
+  - Vector Polyline overlays colored by risk category, with dashed pattern for unscored/unavailable segments
+  - Collapsible Legend card explaining score ranges, category thresholds, and academic honesty notices
+  - Tappable segment inspection card displaying segment name, highway type, safety score, relative risk, lighting, and synthetic demonstration warning
+  - Coexistence demonstration: `🧭 Route Test` button demonstrating seamless coexistence of heatmap segments with active navigation polylines
+  - Loading, error with retry, empty state, and location permission denial fallbacks
+- [x] Route comparison integration (`mobile/app/(tabs)/routes.tsx`):
+  - Added optional `🔥 Heatmap Overlay` toggle in the Route Comparison tab so users can inspect routes overlaid directly on safety heatmap segments
+- [x] Automated test suites:
+  - Backend unit & integration tests: **57 passed out of 57 tests** (added `HeatmapServiceTest` [9 tests] and `HeatmapControllerTest` [2 tests])
+  - Mobile TypeScript compilation (`npx tsc --noEmit`): **0 errors** across entire codebase
+  - Python / FastAPI ML tests: **15 passed out of 15 tests** with 100% success rate
+  - Total workspace tests: **129 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/safety-heatmap.md`
+  - Updated `docs/api.md` with `/api/heatmap` specification
+
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -548,6 +604,10 @@ None.
 | 2026-10-13 | Segment Sequence Identity for Duplicate Detection | Compares ordered segment IDs to prevent misleading users with duplicate alternatives |
 | 2026-10-13 | Dynamic Empirical Trade-Off Synthesis | Formulates clear factual summaries (Δt, Δd, Δsafety, % lit) rather than static copy |
 | 2026-10-13 | Explicit UNSCORED State on ML Degradation | Prevents false safety claims by clearly designating routes as unscored when ML is down |
+| 2026-10-13 | Max Viewport Bounding Box Span (<= 0.15 deg) | Prevents memory exhaustion and unmanageable payloads by rejecting zoomed-out spatial queries |
+| 2026-10-13 | Dashed Gray Neutral Treatment for Unscored Segments | Clearly signals missing data or offline ML status without confusing users or asserting safety |
+| 2026-10-13 | Multi-Representation Geometry Serialization | Exposes both GeoJSON LineString and mobile coordinate lists for seamless cross-platform consumption |
+| 2026-10-13 | Dual-Screen Route & Heatmap Coexistence | Supports heatmap underlays on both the primary map screen and the route comparison screen |
 
 
 

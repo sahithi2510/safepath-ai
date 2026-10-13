@@ -13,6 +13,7 @@ import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { api } from '../../services/api';
+import { fetchHeatmap, HeatmapSegment } from '../../services/heatmap';
 
 export interface Coordinate {
   latitude: number;
@@ -82,6 +83,33 @@ export default function RoutesScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchResponse, setSearchResponse] = useState<RouteSearchResponse | null>(null);
   const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'BALANCED' | 'SAFEST'>('SAFEST');
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapSegments, setHeatmapSegments] = useState<HeatmapSegment[]>([]);
+  const [loadingHeatmap, setLoadingHeatmap] = useState(false);
+
+  const handleToggleHeatmap = async () => {
+    const next = !showHeatmap;
+    setShowHeatmap(next);
+    if (next && heatmapSegments.length === 0) {
+      const sLat = parseFloat(startLat) || 12.9756;
+      const sLon = parseFloat(startLon) || 77.6066;
+      const eLat = parseFloat(endLat) || 12.9716;
+      const eLon = parseFloat(endLon) || 77.6074;
+      const minLat = Math.max(-90, Math.min(sLat, eLat) - 0.015);
+      const maxLat = Math.min(90, Math.max(sLat, eLat) + 0.015);
+      const minLon = Math.max(-180, Math.min(sLon, eLon) - 0.015);
+      const maxLon = Math.min(180, Math.max(sLon, eLon) + 0.015);
+      setLoadingHeatmap(true);
+      try {
+        const hm = await fetchHeatmap({ minLat, minLon, maxLat, maxLon, limit: 300 });
+        setHeatmapSegments(hm.segments);
+      } catch (e) {
+        // Fallback gracefully if offline
+      } finally {
+        setLoadingHeatmap(false);
+      }
+    }
+  };
 
   const handleSearchRoutes = async () => {
     const sLat = parseFloat(startLat);
@@ -390,6 +418,36 @@ export default function RoutesScreen() {
             })}
           </View>
 
+          {/* Map Layer Controls */}
+          <View style={styles.mapControlsHeader}>
+            <TouchableOpacity
+              style={[
+                styles.heatmapToggleBtn,
+                showHeatmap ? styles.heatmapToggleBtnActive : null,
+              ]}
+              onPress={handleToggleHeatmap}
+              accessibilityRole="switch"
+              accessibilityLabel="Toggle safety heatmap overlay under routes"
+              accessibilityState={{ checked: showHeatmap }}
+            >
+              <Text
+                style={[
+                  styles.heatmapToggleBtnText,
+                  showHeatmap ? styles.heatmapToggleBtnTextActive : null,
+                ]}
+              >
+                {loadingHeatmap
+                  ? 'Loading Heatmap...'
+                  : showHeatmap
+                  ? '🔥 Heatmap Overlay: ON'
+                  : '⚪ Heatmap Overlay: OFF'}
+              </Text>
+            </TouchableOpacity>
+            {showHeatmap && (
+              <Text style={styles.demoWatermarkText}>DEMO ML MODEL</Text>
+            )}
+          </View>
+
           {/* Interactive Map */}
           <View style={styles.mapWrapper}>
             <MapView
@@ -401,6 +459,18 @@ export default function RoutesScreen() {
                 longitudeDelta: 0.02,
               }}
             >
+              {/* Safety Heatmap Underlay Segments */}
+              {showHeatmap &&
+                heatmapSegments.map((seg) => (
+                  <Polyline
+                    key={`seg-${seg.segmentId}`}
+                    coordinates={seg.coordinates}
+                    strokeColor={seg.colorHex}
+                    strokeWidth={3}
+                    lineDashPattern={seg.scoringStatus !== 'SCORED' ? [4, 4] : undefined}
+                  />
+                ))}
+
               {/* Unselected Polylines (Rendered first) */}
               {(['FASTEST', 'BALANCED', 'SAFEST'] as const).map((mode) => {
                 if (mode === selectedMode) return null;
@@ -846,5 +916,41 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#D48800',
+  },
+  mapControlsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  heatmapToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#D1D1D6',
+  },
+  heatmapToggleBtnActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  heatmapToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  heatmapToggleBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  demoWatermarkText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FF9500',
+    backgroundColor: '#FFF2D6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
 });

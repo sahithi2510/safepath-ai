@@ -240,6 +240,86 @@ Get user's route search history.
 
 ---
 
+## 3.1 Safety Heatmap
+
+### GET /api/heatmap (Alias: /api/routes/heatmap)
+
+Retrieve road-segment geometries and relative-risk safety predictions within a geographic bounding box.
+
+**Query Parameters:**
+- `minLat` (required): Minimum latitude (WGS84, -90.0 to 90.0)
+- `minLon` (required): Minimum longitude (WGS84, -180.0 to 180.0)
+- `maxLat` (required): Maximum latitude (WGS84, -90.0 to 90.0)
+- `maxLon` (required): Maximum longitude (WGS84, -180.0 to 180.0)
+- `limit` (optional): Maximum segments returned (default: 500, clamped to 1..1000)
+
+**Validation Constraints:**
+- `minLat <= maxLat` and `minLon <= maxLon`
+- `(maxLat - minLat) <= 0.15` (~16.5 km maximum latitude span)
+- `(maxLon - minLon) <= 0.15` (~16.5 km maximum longitude span)
+
+**Response 200:**
+```json
+{
+  "boundingBox": {
+    "minLat": 12.9700,
+    "minLon": 77.6000,
+    "maxLat": 12.9800,
+    "maxLon": 77.6100
+  },
+  "totalSegmentsReturned": 45,
+  "scoredSegmentsCount": 45,
+  "unscoredSegmentsCount": 0,
+  "mlServiceAvailable": true,
+  "isSyntheticDemonstration": true,
+  "modelVersion": "xgboost-v1.0.0",
+  "generatedAt": "2026-10-13T12:00:00Z",
+  "disclaimer": "Safety scores and risk categories are feature-based estimates derived from demonstration models. They do not constitute guaranteed safety or calibrated crime probabilities.",
+  "dataProvenanceNote": "Model predictions derive from synthetic training fixtures and demonstration road attributes. Unobserved streets are never assumed safe.",
+  "segments": [
+    {
+      "segmentId": 101,
+      "osmId": 1234567,
+      "name": "MG Road",
+      "highwayType": "primary",
+      "coordinates": [
+        { "latitude": 12.9756, "longitude": 77.6066 },
+        { "latitude": 12.9716, "longitude": 77.6074 }
+      ],
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [77.6066, 12.9756],
+          [77.6074, 12.9716]
+        ]
+      },
+      "relativeRiskScore": 0.25,
+      "safetyScore": 75.0,
+      "riskCategory": "LOW",
+      "scoringStatus": "SCORED",
+      "colorHex": "#34C759",
+      "isLit": true,
+      "surface": "asphalt",
+      "lengthMeters": 450.2,
+      "isSyntheticDemonstration": true,
+      "modelVersion": "xgboost-v1.0.0",
+      "scoredAt": "2026-10-13T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Errors:**
+- `400` — Invalid bounding box coordinates or span exceeding 0.15 degrees
+- `500` — Unexpected server error
+
+**Integrity & Degradation Policy:**
+- When the ML service is unreachable, road segments are still returned for the viewport with `scoringStatus: "UNAVAILABLE"`, `riskCategory: "UNSCORED"`, and neutral gray color `#8E8E93`.
+- Segments lacking observation data are marked `UNSCORED` and are **never** assigned a default low-risk or safe value.
+- Coordinates adhere to EPSG:4326 WGS84 standard.
+
+---
+
 ## 4. Community Reports
 
 ### POST /api/reports
