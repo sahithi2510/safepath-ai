@@ -123,9 +123,9 @@ Update route preference profile.
 
 ## 3. Routes
 
-### POST /api/routes/search
+### POST /api/routes/search (and POST /api/routes/compare)
 
-Search for routes. Returns three route options.
+Search and compare three candidate routes (`FASTEST`, `BALANCED`, `SAFEST`). Enforces duplicate-path detection, transparent trade-off explanation, and explicit UNSCORED state when ML service is offline.
 
 **Request:**
 ```json
@@ -143,6 +143,7 @@ Search for routes. Returns three route options.
   "departureTime": "2026-10-08T18:00:00+05:30"
 }
 ```
+*Flat coordinates (`startLat`, `startLon`, `endLat`, `endLon`) are also supported.*
 
 **Response 200:**
 ```json
@@ -150,39 +151,78 @@ Search for routes. Returns three route options.
   "requestId": "uuid",
   "fastestRoute": {
     "routeMode": "FASTEST",
+    "distanceMeters": 1850.5,
+    "durationSeconds": 1320.0,
+    "safetyScore": 45.0,
+    "riskLevel": "MODERATE",
+    "safetyLabel": "Moderate",
+    "litSegmentsPercentage": 60.0,
+    "isDistinct": true,
+    "duplicateOf": null,
+    "isMlScored": true,
+    "modelVersion": "xgb-v1.0",
+    "importantFactors": [
+      "Minimizes estimated walking duration",
+      "60% of route is along verified lit segments"
+    ],
     "geometry": {
       "type": "LineString",
       "coordinates": [[77.5946, 12.9716], ["..."]]
     },
-    "distanceMeters": 1850.5,
-    "durationSeconds": 1320,
-    "safetyScore": 0.62,
-    "riskLevel": "MODERATE",
-    "safetyLabel": "Moderate",
-    "importantFactors": [
-      "Faster route passes through less-lit areas",
-      "Lower pedestrian activity estimated"
+    "coordinates": [
+      { "latitude": 12.9716, "longitude": 77.5946 },
+      { "latitude": 12.9800, "longitude": 77.6100 }
     ],
-    "explanation": {
-      "factors": [
-        {"name": "lighting_score", "contribution": -0.12, "description": "Lower lighting along this route"},
-        {"name": "nearest_police_m", "contribution": 0.05, "description": "Police station within 500m"}
-      ],
-      "disclaimer": "Explanations are based on model features, not direct observations."
-    },
-    "demo": false
+    "disclaimer": "Relative risk estimate derived from street attributes; not a validated empirical probability of crime occurrence."
   },
-  "balancedRoute": { "..." },
-  "safestRoute": { "..." },
+  "balancedRoute": {
+    "routeMode": "BALANCED",
+    "distanceMeters": 1980.0,
+    "durationSeconds": 1414.0,
+    "safetyScore": 78.0,
+    "riskLevel": "LOW",
+    "safetyLabel": "Safe",
+    "isDistinct": true,
+    "duplicateOf": null
+  },
+  "safestRoute": {
+    "routeMode": "SAFEST",
+    "distanceMeters": 2100.0,
+    "durationSeconds": 1500.0,
+    "safetyScore": 88.0,
+    "riskLevel": "VERY_LOW",
+    "safetyLabel": "Very Safe",
+    "isDistinct": true,
+    "duplicateOf": null
+  },
+  "tradeOffExplanation": "SAFEST route trades +3.0 min (+250 m) for a +43.0 pt improvement in safety score (95% vs 60% lit streets).",
+  "hasDistinctAlternatives": true,
+  "distinctRouteCount": 3,
   "computedAt": "2026-10-08T12:30:00Z",
   "mlServiceAvailable": true,
-  "weatherContextAvailable": true
+  "weatherContextAvailable": false
+}
+```
+
+### POST /api/routes
+
+Legacy single route planning endpoint.
+
+**Request:**
+```json
+{
+  "startLat": 12.9716,
+  "startLon": 77.5946,
+  "endLat": 12.9800,
+  "endLon": 77.6100,
+  "preference": "SAFEST"
 }
 ```
 
 **Errors:**
 - `400` — Invalid coordinates or missing fields
-- `404` — No route found between origin and destination
+- `404` — No walkable road network or no route found between origin and destination
+- `503` — ML service unavailable when `SAFEST` route is requested individually
 - `503` — Routing service temporarily unavailable
 
 **Notes:**

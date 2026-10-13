@@ -1,5 +1,6 @@
 package com.safepath.backend.service;
 
+import com.safepath.backend.dto.RouteDto;
 import com.safepath.backend.dto.RouteRequestDto;
 import com.safepath.backend.dto.RouteResponseDto;
 import com.safepath.backend.dto.ml.PredictRiskRequestDto;
@@ -11,6 +12,7 @@ import com.safepath.backend.entity.RouteResult;
 import com.safepath.backend.entity.User;
 import com.safepath.backend.exception.MlServiceException;
 import com.safepath.backend.exception.MlServiceUnavailableException;
+import com.safepath.backend.exception.NoRouteFoundException;
 import com.safepath.backend.repository.RoadSegmentRepository;
 import com.safepath.backend.repository.RouteRequestRepository;
 import com.safepath.backend.repository.RouteResultRepository;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -203,6 +206,386 @@ public class RouteService {
         result = routeResultRepository.save(result);
 
         return mapToDto(result, isMlScored, isSyntheticDemonstration, riskLevel, modelVersion, notes);
+    }
+
+    /**
+     * Searches and compares route alternatives (FASTEST, BALANCED, SAFEST).
+     * Enforces duplicate-path detection, transparent trade-off explanation,
+     * and explicit UNSCORED state when ML inference is unavailable.
+     */
+    @Transactional
+    public RouteDto.SearchResponse searchRoutes(String userEmail, RouteDto.SearchRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Search request is required");
+        }
+
+        Double startLat = request.getEffectiveStartLat();
+        Double startLon = request.getEffectiveStartLon();
+        Double endLat = request.getEffectiveEndLat();
+        Double endLon = request.getEffectiveEndLon();
+
+        if (startLat == null || startLon == null || endLat == null || endLon == null) {
+            throw new IllegalArgumentException("Origin and Destination coordinates (latitude and longitude) are required.");
+        }
+
+        User user = null;
+        if (userEmail != null) {
+            user = userRepository.findByEmail(userEmail).orElse(null);
+        }
+
+        Point startPoint = geometryFactory.createPoint(new Coordinate(startLon, startLat));
+        startPoint.setSRID(4326);
+        Point endPoint = geometryFactory.createPoint(new Coordinate(endLon, endLat));
+        endPoint.setSRID(4326);
+
+        if (user != null) {
+            RouteRequest routeReq = new RouteRequest();
+            routeReq.setUser(user);
+            routeReq.setStartPoint(startPoint);
+            routeReq.setEndPoint(endPoint);
+            routeReq.setPreference(RoutePreference.STANDARD);
+            routeRequestRepository.save(routeReq);
+        }
+
+        // 1. Fetch local walkable road network within 5km radius
+        List<RoadSegment> localSegments = roadSegmentRepository.findWalkableSegmentsWithinRadius(startPoint, 5000.0);
+        if (localSegments == null || localSegments.isEmpty()) {
+            throw new NoRouteFoundException("No walkable road network found within 5km of origin.");
+        }
+
+        // 2. Build directed graph
+        Map<Long, List<RoadSegment>> graph = new HashMap<>();
+        for (RoadSegment segment : localSegments) {
+            graph.computeIfAbsent(segment.getStartNodeId(), k -> new ArrayList<>()).add(segment);
+            if (!Boolean.TRUE.equals(segment.getIsOneway())) {
+                graph.computeIfAbsent(segment.getEndNodeId(), k -> new ArrayList<>()).add(segment);
+            }
+        }
+
+        RoadSegment closestToStart = roadSegmentRepository.findNearestSegment(startPoint);
+        RoadSegment closestToEnd = roadSegmentRepository.findNearestSegment(endPoint);
+
+        if (closestToStart == null || closestToEnd == null) {
+            throw new NoRouteFoundException("Could not connect origin or destination to the local road network.");
+        }
+
+        // 3. Batch predict ML risks for local road segments (once)
+        Map<String, Double> riskScores = new HashMap<>();
+        Map<String, PredictRiskResponseDto> predictionsMap = Collections.emptyMap();
+        boolean mlServiceAvailable = false;
+        Boolean isSyntheticDemonstration = null;
+        String modelVersion = null;
+
+        try {
+            List<PredictRiskRequestDto> batchRequests = roadSegmentFeatureService.prepareBatchRequests(localSegments, LocalDateTime.now());
+            predictionsMap = mlServiceClient.predictRiskBatch(batchRequests);
+
+            for (Map.Entry<String, PredictRiskResponseDto> entry : predictionsMap.entrySet()) {
+                if (entry.getValue() != null && entry.getValue().getRiskScore() != null) {
+                    riskScores.put(entry.getKey(), entry.getValue().getRiskScore());
+                    if (entry.getValue().getIsSyntheticDemonstration() != null) {
+                        isSyntheticDemonstration = entry.getValue().getIsSyntheticDemonstration();
+                    }
+                    if (entry.getValue().getModelVersion() != null) {
+                        modelVersion = entry.getValue().getModelVersion();
+                    }
+                }
+            }
+            mlServiceAvailable = !riskScores.isEmpty();
+        } catch (Exception e) {
+            log.warn("ML risk predictions unavailable during route search: {}. Proceeding with non-ML fallback.", e.getMessage());
+            mlServiceAvailable = false;
+        }
+
+        // 4. Calculate FASTEST route (ML-independent, gamma=0.0)
+        List<RoadSegment> fastestSegments = aStarRoutingEngine.findRoute(
+                closestToStart.getStartNodeId(),
+                closestToEnd.getEndNodeId(),
+                RoutePreference.FASTEST,
+                graph,
+                riskScores);
+
+        // 5. Calculate BALANCED route
+        List<RoadSegment> balancedSegments = aStarRoutingEngine.findRoute(
+                closestToStart.getStartNodeId(),
+                closestToEnd.getEndNodeId(),
+                RoutePreference.BALANCED,
+                graph,
+                riskScores);
+
+        // 6. Calculate SAFEST route (strictly depends on ML risk availability)
+        List<RoadSegment> safestSegments = null;
+        if (mlServiceAvailable) {
+            try {
+                safestSegments = aStarRoutingEngine.findRoute(
+                        closestToStart.getStartNodeId(),
+                        closestToEnd.getEndNodeId(),
+                        RoutePreference.SAFEST,
+                        graph,
+                        riskScores);
+            } catch (Exception e) {
+                log.warn("Failed to compute SAFEST route: {}", e.getMessage());
+            }
+        }
+
+        // 7. Build RouteResults
+        RouteDto.RouteResult fastestResult = buildRouteResult(
+                "FASTEST", fastestSegments, predictionsMap, mlServiceAvailable, isSyntheticDemonstration, modelVersion);
+
+        RouteDto.RouteResult balancedResult = buildRouteResult(
+                "BALANCED", balancedSegments, predictionsMap, mlServiceAvailable, isSyntheticDemonstration, modelVersion);
+
+        RouteDto.RouteResult safestResult;
+        if (mlServiceAvailable && safestSegments != null) {
+            safestResult = buildRouteResult(
+                    "SAFEST", safestSegments, predictionsMap, true, isSyntheticDemonstration, modelVersion);
+        } else {
+            // Missing ML service: Never invent safety score; mark UNSCORED
+            safestResult = RouteDto.RouteResult.builder()
+                    .routeMode("SAFEST")
+                    .distanceMeters(null)
+                    .durationSeconds(null)
+                    .safetyScore(null)
+                    .riskLevel("UNSCORED")
+                    .safetyLabel("Unscored")
+                    .isMlScored(false)
+                    .importantFactors(List.of("ML risk prediction service unavailable; safest route calculation deferred"))
+                    .notes("ML service unavailable; route not scored.")
+                    .disclaimer("Unscored routes do not imply safety.")
+                    .build();
+        }
+
+        // 8. Duplicate-path detection: FASTEST and SAFEST are the primary poles
+        fastestResult.setIsDistinct(true);
+        fastestResult.setDuplicateOf(null);
+
+        boolean safestEqualsFastest = (safestSegments != null) && arePathsEqual(safestSegments, fastestSegments);
+        if (safestSegments != null) {
+            if (safestEqualsFastest) {
+                safestResult.setIsDistinct(false);
+                safestResult.setDuplicateOf("FASTEST");
+            } else {
+                safestResult.setIsDistinct(true);
+                safestResult.setDuplicateOf(null);
+            }
+        } else {
+            safestResult.setIsDistinct(false);
+            safestResult.setDuplicateOf(null);
+        }
+
+        boolean balancedEqualsFastest = arePathsEqual(balancedSegments, fastestSegments);
+        boolean balancedEqualsSafest = (safestSegments != null) && arePathsEqual(balancedSegments, safestSegments);
+
+        if (balancedEqualsFastest) {
+            balancedResult.setIsDistinct(false);
+            balancedResult.setDuplicateOf("FASTEST");
+        } else if (balancedEqualsSafest) {
+            balancedResult.setIsDistinct(false);
+            balancedResult.setDuplicateOf("SAFEST");
+        } else {
+            balancedResult.setIsDistinct(true);
+            balancedResult.setDuplicateOf(null);
+        }
+
+        int distinctCount = 0;
+        if (Boolean.TRUE.equals(fastestResult.getIsDistinct())) distinctCount++;
+        if (Boolean.TRUE.equals(balancedResult.getIsDistinct())) distinctCount++;
+        if (Boolean.TRUE.equals(safestResult.getIsDistinct())) distinctCount++;
+
+        boolean hasDistinctAlternatives = distinctCount > 1;
+
+        // 9. Synthesize transparent trade-off explanation
+        String tradeOffExplanation = generateTradeOffExplanation(
+                fastestResult, balancedResult, safestResult, mlServiceAvailable, distinctCount);
+
+        return RouteDto.SearchResponse.builder()
+                .requestId(UUID.randomUUID().toString())
+                .fastestRoute(fastestResult)
+                .balancedRoute(balancedResult)
+                .safestRoute(safestResult)
+                .tradeOffExplanation(tradeOffExplanation)
+                .hasDistinctAlternatives(hasDistinctAlternatives)
+                .distinctRouteCount(distinctCount)
+                .computedAt(OffsetDateTime.now())
+                .mlServiceAvailable(mlServiceAvailable)
+                .weatherContextAvailable(false)
+                .notes(mlServiceAvailable ? "Evaluated with machine learning risk inference" : "Calculated without ML risk inference (fallback heuristics)")
+                .build();
+    }
+
+    private boolean arePathsEqual(List<RoadSegment> path1, List<RoadSegment> path2) {
+        if (path1 == path2) return true;
+        if (path1 == null || path2 == null) return false;
+        if (path1.size() != path2.size()) return false;
+        for (int i = 0; i < path1.size(); i++) {
+            UUID id1 = path1.get(i).getId();
+            UUID id2 = path2.get(i).getId();
+            if (id1 != null && id2 != null) {
+                if (!id1.equals(id2)) return false;
+            } else {
+                if (!Objects.equals(path1.get(i).getStartNodeId(), path2.get(i).getStartNodeId()) ||
+                    !Objects.equals(path1.get(i).getEndNodeId(), path2.get(i).getEndNodeId())) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private RouteDto.RouteResult buildRouteResult(
+            String mode, 
+            List<RoadSegment> segments, 
+            Map<String, PredictRiskResponseDto> predictionsMap, 
+            boolean isMlScored, 
+            Boolean isSyntheticDemonstration, 
+            String modelVersion) {
+
+        List<RouteDto.CoordinateDto> coordList = new ArrayList<>();
+        List<List<Double>> geoJsonCoords = new ArrayList<>();
+        double totalDistance = 0.0;
+        double totalDuration = 0.0;
+        double weightedSafetySum = 0.0;
+        double totalScoredLength = 0.0;
+        long litSegmentsCount = 0;
+        long totalSegmentsCount = segments != null ? segments.size() : 0;
+
+        if (segments != null) {
+            for (RoadSegment segment : segments) {
+                Coordinate[] coords = segment.getGeometry() != null ? segment.getGeometry().getCoordinates() : new Coordinate[0];
+                for (Coordinate coord : coords) {
+                    if (coordList.isEmpty() ||
+                        !coordList.get(coordList.size() - 1).getLatitude().equals(coord.getY()) ||
+                        !coordList.get(coordList.size() - 1).getLongitude().equals(coord.getX())) {
+                        coordList.add(RouteDto.CoordinateDto.builder()
+                                .latitude(coord.getY())
+                                .longitude(coord.getX())
+                                .build());
+                        geoJsonCoords.add(List.of(coord.getX(), coord.getY()));
+                    }
+                }
+                double segLen = segment.getLengthMeters() != null ? segment.getLengthMeters() : 0.0;
+                totalDistance += segLen;
+                totalDuration += segment.getEstimatedWalkTimeS() != null ? segment.getEstimatedWalkTimeS() : (segLen / 1.4);
+
+                if (Boolean.TRUE.equals(segment.getIsLit())) {
+                    litSegmentsCount++;
+                }
+
+                String segKey = roadSegmentFeatureService.resolveSegmentId(segment);
+                PredictRiskResponseDto pred = predictionsMap != null ? predictionsMap.get(segKey) : null;
+                if (pred != null && pred.getSafetyScore() != null) {
+                    weightedSafetySum += pred.getSafetyScore() * segLen;
+                    totalScoredLength += segLen;
+                }
+            }
+        }
+
+        Map<String, Object> geoJson = new HashMap<>();
+        geoJson.put("type", "LineString");
+        geoJson.put("coordinates", geoJsonCoords);
+
+        Double safetyScore = null;
+        String riskLevel = "UNSCORED";
+        String safetyLabel = "Unscored";
+        if (isMlScored && totalScoredLength > 0.0) {
+            double avgSafety = weightedSafetySum / totalScoredLength;
+            safetyScore = Math.round(avgSafety * 1000.0) / 10.0;
+            riskLevel = deriveRiskCategory(avgSafety);
+            safetyLabel = deriveSafetyLabel(avgSafety);
+        }
+
+        double litPercentage = totalSegmentsCount > 0 ? (double) litSegmentsCount / totalSegmentsCount * 100.0 : 0.0;
+
+        List<String> importantFactors = new ArrayList<>();
+        if ("FASTEST".equals(mode)) {
+            importantFactors.add("Minimizes estimated walking duration");
+            importantFactors.add(String.format("%.0f%% of route is along verified lit segments", litPercentage));
+        } else if ("SAFEST".equals(mode)) {
+            importantFactors.add("Heavily prioritizes lower predicted relative risk");
+            importantFactors.add(String.format("%.0f%% of route is along verified lit segments", litPercentage));
+        } else {
+            importantFactors.add("Balances transit duration and relative risk");
+            importantFactors.add(String.format("%.0f%% of route is along verified lit segments", litPercentage));
+        }
+
+        String notes = isMlScored
+                ? "Scored using ML model " + (modelVersion != null ? modelVersion : "v1") +
+                  (Boolean.TRUE.equals(isSyntheticDemonstration) ? " (synthetic demonstration model)" : "")
+                : ("FASTEST".equals(mode)
+                    ? "FASTEST route prioritized travel time independently of risk scoring."
+                    : "ML risk predictions unavailable; route generated with lighting fallback heuristics.");
+
+        return RouteDto.RouteResult.builder()
+                .routeMode(mode)
+                .geometry(geoJson)
+                .coordinates(coordList)
+                .distanceMeters(Math.round(totalDistance * 10.0) / 10.0)
+                .durationSeconds(Math.round(totalDuration * 10.0) / 10.0)
+                .safetyScore(safetyScore)
+                .riskLevel(riskLevel)
+                .safetyLabel(safetyLabel)
+                .importantFactors(importantFactors)
+                .explanation(null)
+                .demo(isSyntheticDemonstration)
+                .isMlScored(isMlScored)
+                .modelVersion(modelVersion)
+                .litSegmentsPercentage(Math.round(litPercentage * 10.0) / 10.0)
+                .notes(notes)
+                .disclaimer("Relative risk estimate derived from street attributes; not a validated empirical probability of crime occurrence.")
+                .build();
+    }
+
+    private String deriveSafetyLabel(double safetyScoreFraction) {
+        if (safetyScoreFraction >= 0.8) return "Very Safe";
+        if (safetyScoreFraction >= 0.6) return "Safe";
+        if (safetyScoreFraction >= 0.4) return "Moderate";
+        if (safetyScoreFraction >= 0.2) return "Unsafe";
+        return "Very Unsafe";
+    }
+
+    private String generateTradeOffExplanation(
+            RouteDto.RouteResult fastest, 
+            RouteDto.RouteResult balanced, 
+            RouteDto.RouteResult safest, 
+            boolean mlAvailable, 
+            int distinctCount) {
+
+        if (!mlAvailable) {
+            return "ML risk service was unavailable. Alternative routes were generated using physical network topology and lighting heuristics without safety model scoring.";
+        }
+
+        if (distinctCount <= 1) {
+            return "A single feasible path exists on the available road network between origin and destination. FASTEST, BALANCED, and SAFEST follow the identical route.";
+        }
+
+        if (safest != null && Boolean.TRUE.equals(safest.getIsDistinct()) && safest.getDurationSeconds() != null) {
+            double timeDiffMin = (safest.getDurationSeconds() - fastest.getDurationSeconds()) / 60.0;
+            double distDiffM = safest.getDistanceMeters() - fastest.getDistanceMeters();
+            String timeStr = timeDiffMin >= 0.1 ? String.format("+%.1f min", timeDiffMin) : "same duration";
+            String distStr = distDiffM >= 1.0 ? String.format("+%.0f m", distDiffM) : "same distance";
+
+            if (safest.getSafetyScore() != null && fastest.getSafetyScore() != null) {
+                double scoreDiff = safest.getSafetyScore() - fastest.getSafetyScore();
+                if (scoreDiff > 0.0) {
+                    return String.format(
+                        "SAFEST route trades %s (%s) for a +%.1f pt improvement in safety score (%.0f%% vs %.0f%% lit streets).",
+                        timeStr, distStr, scoreDiff, safest.getLitSegmentsPercentage(), fastest.getLitSegmentsPercentage());
+                }
+            }
+
+            return String.format(
+                "SAFEST route takes an alternative path (%s, %s) through streets with higher verified lighting and lower relative risk.",
+                timeStr, distStr);
+        }
+
+        if (balanced != null && Boolean.TRUE.equals(balanced.getIsDistinct()) && balanced.getDurationSeconds() != null) {
+            double timeDiffMin = (balanced.getDurationSeconds() - fastest.getDurationSeconds()) / 60.0;
+            return String.format(
+                "BALANCED route offers an alternative path adding %.1f min over FASTEST to optimize street lighting and walking comfort.",
+                timeDiffMin);
+        }
+
+        return "Distinct route alternatives were calculated based on the configured travel time, distance, and safety weights.";
     }
 
     private String deriveRiskCategory(double safetyScoreFraction) {

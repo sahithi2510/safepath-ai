@@ -36,7 +36,7 @@
 | 16 | FastAPI ML Service | ✅ COMPLETE | FastAPI, SHAP, preprocessor |
 | 17 | Spring Boot ↔ ML Integration | ✅ COMPLETE | RestClient, 15 features, bounded batching, strict fallback |
 | 18 | Risk-Aware A\* Routing | ✅ COMPLETE | Multi-objective cost, zero heuristic, deterministic tie-breaking |
-| 19 | Route Comparison | ⬜ NOT STARTED | |
+| 19 | Route Comparison | ✅ COMPLETE | 3-way comparison, duplicate detection, trade-off synthesis, mobile screen |
 | 20 | Safety Heatmap | ⬜ NOT STARTED | |
 | 21 | Community Reports | ⬜ NOT STARTED | |
 | 22 | Safe Zones | ⬜ NOT STARTED | |
@@ -459,6 +459,52 @@ None.
 
 ---
 
+## Milestone 19 — Route Comparison
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement 3-way route comparison capability (`FASTEST`, `BALANCED`, `SAFEST`), duplicate-path detection, transparent trade-off explanations, explicit UNSCORED handling, and mobile comparison screen with synchronized multi-polyline map integration.
+
+### Deliverables & Verification Checklist
+- [x] Backend route comparison service (`RouteService.searchRoutes`):
+  - Evaluates `FASTEST` ($\alpha=0.8, \beta=0.2, \gamma=0.0$), `BALANCED` ($\alpha=0.3, \beta=0.2, \gamma=0.5$), and `SAFEST` ($\alpha=0.1, \beta=0.1, \gamma=0.8$)
+  - Single batch ML risk query (`/predict-risk/batch`) for all local network segments, minimizing network overhead
+  - GeoJSON LineString geometry and coordinate arrays for all calculated candidate routes
+  - Length-weighted safety score aggregation ($0.0 - 100.0$) and application-defined risk categories
+- [x] Duplicate-path detection & distinctness verification:
+  - Sequence-level segment comparison across candidates
+  - Truthfully flags when routes coincide on single-corridor networks (`isDistinct: false`, `duplicateOf: "FASTEST"` or `"SAFEST"`)
+  - Avoids presenting identical alternatives as distinct choices
+- [x] Transparent trade-off synthesis:
+  - Calculates empirical differences in transit duration ($\Delta t$), detour distance ($\Delta d$), and safety score ($\Delta s$)
+  - Details street lighting percentages (lit vs unlit)
+  - Distinguishes relative risk model scores from empirical crime probabilities
+- [x] Graceful degradation & missing data handling:
+  - Explicit `UNSCORED` state when FastAPI ML service is unreachable or unready
+  - Strictly refuses to invent safety scores or falsely assert safety for unscored routes
+  - Independent `FASTEST` travel time calculation proceeds without ML dependency
+  - `NoRouteFoundException` (HTTP 404) for disconnected graphs and unreachable destinations
+- [x] REST API endpoints (`RouteController`):
+  - `POST /api/routes/search`: standard route comparison endpoint
+  - `POST /api/routes/compare`: dedicated alias endpoint
+  - `POST /api/routes`: preserved for backward compatibility
+- [x] Mobile route comparison screen (`mobile/app/(tabs)/routes.tsx`):
+  - Origin and destination inputs with quick Bangalore coordinate presets
+  - Side-by-side 3-way selector tabs (`FASTEST`, `BALANCED`, `SAFEST`)
+  - Multi-polyline `MapView` rendering with active route highlighting
+  - Prominent trade-off explanation and relative risk disclaimer
+  - Loading spinner, network error banner with retry button, and empty state
+  - Accessibility labels and semantic roles throughout
+- [x] Automated test suites:
+  - Backend unit & integration tests: **46 passed out of 46 tests** (`RouteComparisonServiceTest`, `RouteControllerTest`, `AStarRoutingEngineTest`, `RoutingPropertiesTest`, `MlServiceClientTest`, `RoadSegmentFeatureServiceTest`, `RouteServiceMlIntegrationTest`, `MlServicePropertiesTest`, `SafePathBackendApplicationTests`)
+  - Mobile TypeScript compilation (`npx tsc --noEmit`): **0 errors**
+  - Python / FastAPI ML tests: **62 passed out of 62 tests**
+  - Total workspace: **108 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/route-comparison.md`
+  - Updated `docs/api.md`
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -498,6 +544,10 @@ None.
 | 2026-10-12 | Three-tier Deterministic Tie-Breaking (f, g, id) | Ensures 100% reproducible path selection when competing routes have equal total cost |
 | 2026-10-12 | Non-Probabilistic Multi-Criteria Penalty View | Clarifies that edge risk is an uncalibrated relative score, not an additive crime probability |
 | 2026-10-12 | RoutingProperties Weight Validation & Normalization | Prevents negative or non-finite weights from corrupting route search cost |
+| 2026-10-13 | Single-Batch Prediction for Route Comparison | Queries local network segment risks in one batch call to avoid 3x redundant ML invocations |
+| 2026-10-13 | Segment Sequence Identity for Duplicate Detection | Compares ordered segment IDs to prevent misleading users with duplicate alternatives |
+| 2026-10-13 | Dynamic Empirical Trade-Off Synthesis | Formulates clear factual summaries (Δt, Δd, Δsafety, % lit) rather than static copy |
+| 2026-10-13 | Explicit UNSCORED State on ML Degradation | Prevents false safety claims by clearly designating routes as unscored when ML is down |
 
 
 
