@@ -3,6 +3,9 @@ FROM eclipse-temurin:21-jre-alpine
 LABEL maintainer="SafePath AI"
 LABEL description="SafePath AI Spring Boot Backend"
 
+# Install curl for reliable container healthchecks
+RUN apk add --no-cache curl
+
 # Create non-root user for security
 RUN addgroup -S safepath && adduser -S safepath -G safepath
 

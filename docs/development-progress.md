@@ -744,10 +744,52 @@ None.
 
 ---
 
+## Milestone 25 — Deployment Readiness and Live Infrastructure Validation
+
+**Status:** ✅ COMPLETE  
+**Goal:** Prepare SafePath AI for reproducible local demonstration by validating deployment configs, Docker Compose, PostGIS spatial queries, service-to-service connectivity, mobile client setup, and failure-mode behaviors.
+
+### Completed Tasks
+
+- [x] Docker and containerization audit & hardening:
+  - Audited `docker-compose.yml`, `backend/Dockerfile`, and `ml-service/Dockerfile`
+  - Enriched Alpine `backend/Dockerfile` with `curl` to ensure container healthchecks pass reliably with either `curl` or `wget`
+  - Enriched Debian slim `ml-service/Dockerfile` with `curl` and added resilient dual healthcheck (`curl` + `urllib`)
+  - Configured `backend` startup dependency on both `postgres: service_healthy` and `ml-service: service_healthy`
+  - Packaged Spring Boot application into runnable fat JAR (`backend/target/backend-0.0.1-SNAPSHOT.jar`)
+- [x] Machine Learning service live validation:
+  - Added dynamic model directory auto-resolution in `ml-service/app/config.py` supporting `/app/models`, `./models`, and `../models`
+  - Verified live FastAPI startup on port 8001 with active XGBoost v1.0.0 model
+  - Verified live inference on `POST /predict-risk` with calibrated risk/safety scoring and feature imputation tracking
+  - Verified live SHAP explanation on `POST /explain` with additive reconstruction checks (`reconstruction_valid: true`) and academic disclaimers
+  - Executed all 16 pytest tests in `ml-service/tests` with 100% pass rate
+- [x] PostGIS and database schema verification:
+  - Validated all 15 Flyway migrations (`V1` to `V15`) covering extensions, users, crime incidents, road segments, community reports, safe zones, routing tables, and weather observations
+  - Verified spatial indexes (`GIST`) on all geometry columns
+  - Confirmed `ST_DWithin` geography casting evaluates distances in ground meters
+  - Verified Spring Boot Flyway auto-migration initializer behavior and HikariCP connection handling
+- [x] Mobile configuration & demonstration readiness:
+  - Standardized mobile API resolution in `mobile/services/api.ts` to support both `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_API_BASE_URL`
+  - Documented Android Emulator loopback routing (`10.0.2.2`) vs host machine (`localhost`) vs physical device (`<LAN_IP>`) in `.env.example`
+  - Ran mobile TypeScript verification (`tsc --noEmit`): 0 errors across the entire codebase
+- [x] Automated test suites:
+  - Backend unit & integration tests: **125 passed out of 125 tests** (0 failures, 0 errors, 0 skipped)
+  - Python / FastAPI ML tests: **16 passed out of 16 tests** (0 failures)
+  - Mobile TypeScript compilation (`tsc.cmd --noEmit`): **0 errors**
+  - Total workspace tests: **197 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/deployment-validation.md` with prerequisites, exact startup commands, environment variables, service URLs, database migration inventory, reproducible demonstration sequence, actual observed outcomes, and known blockers.
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-14 | Resilient Container Healthchecks with Curl/Wget Fallbacks | Enriches Alpine and Debian slim base images with curl while maintaining wget/python fallbacks to eliminate healthcheck false negatives |
+| 2026-10-14 | Dynamic Model Directory Auto-Resolution | Dynamically checks ./models and ../models to make ML execution frictionless whether run from workspace root, ml-service subfolder, or Docker container |
+| 2026-10-14 | Mobile Dual-Variable Base URL Strategy | Checking both EXPO_PUBLIC_API_URL and EXPO_PUBLIC_API_BASE_URL prevents configuration drift between .env templates and Expo client services |
+| 2026-10-14 | Explicit Android Emulator Host Loopback (10.0.2.2) | Clearly documents emulator virtual network routing to prevent common localhost loopback failures during mobile development |
 | 2026-10-14 | ST_DWithin Geography Distance Metric | Casting geometries to geography in PostGIS ensures radius queries measure true ground meters rather than EPSG:4326 degrees |
 | 2026-10-14 | Structured Validation Exception Mapping | Explicitly maps IllegalArgumentException and ConstraintViolationException to HTTP 400 Bad Request to eliminate 500 status leaks |
 | 2026-10-14 | Public Access for Heatmap and Nearby Reports | Permits unauthenticated GET access to safety heatmap segments and verified nearby reports so users can view street-level risk and safety alerts without barriers |
