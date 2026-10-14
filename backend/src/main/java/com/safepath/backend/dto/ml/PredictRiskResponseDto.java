@@ -1,5 +1,6 @@
 package com.safepath.backend.dto.ml;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,10 +16,14 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class PredictRiskResponseDto {
 
     @JsonProperty("segment_id")
     private String segmentId;
+
+    @JsonProperty("prediction_timestamp")
+    private String predictionTimestamp;
 
     @JsonProperty("raw_model_output")
     private Double rawModelOutput;

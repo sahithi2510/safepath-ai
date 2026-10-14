@@ -258,6 +258,8 @@ def test_validation_out_of_range_values_rejected(client):
         {"crime_density_500m": -0.5},   # density < 0.0
         {"nearest_police_m": -10.0},    # distance < 0.0
         {"verified_report_count": -2},  # count < 0
+        {"weather_precipitation": -1.0}, # precipitation < 0.0
+        {"weather_visibility": -5.0},   # visibility < 0.0
     ]
     for invalid_features in test_cases:
         response = client.post(
@@ -368,3 +370,42 @@ def test_errors_do_not_leak_stack_traces_or_paths(client):
     content_400 = resp_400.text
     assert "Traceback" not in content_400
     assert "C:\\Users\\" not in content_400
+
+
+def test_weather_features_imputation_and_inference(client):
+    """Verify weather features 13 & 14 integration, imputation tracking, and valid units."""
+    # 1. Prediction with explicit weather observations (heavy rain, low visibility)
+    payload_observed = {
+        "segment_id": "seg-storm-01",
+        "features": {
+            "weather_precipitation": 18.5,  # 18.5 mm rain
+            "weather_visibility": 1.2,       # 1.2 km visibility
+            "hour_of_day": 20,
+            "day_of_week": 4
+        }
+    }
+    resp_obs = client.post("/predict-risk", json=payload_observed)
+    assert resp_obs.status_code == 200
+    data_obs = resp_obs.json()
+    assert 0.0 <= data_obs["risk_score"] <= 1.0
+    assert 0.0 <= data_obs["safety_score"] <= 1.0
+    # weather features were observed, so they must not be in imputed_features
+    assert "weather_precipitation" not in data_obs["imputed_features"]
+    assert "weather_visibility" not in data_obs["imputed_features"]
+
+    # 2. Prediction with omitted weather observations (unobserved)
+    payload_unobserved = {
+        "segment_id": "seg-clear-01",
+        "features": {
+            "hour_of_day": 14,
+            "day_of_week": 2
+        }
+    }
+    resp_unobs = client.post("/predict-risk", json=payload_unobserved)
+    assert resp_unobs.status_code == 200
+    data_unobs = resp_unobs.json()
+    # Missing weather features must be explicitly recorded in imputed_features
+    assert "weather_precipitation" in data_unobs["imputed_features"]
+    assert "weather_visibility" in data_unobs["imputed_features"]
+    assert data_unobs["feature_completeness"] < 1.0
+

@@ -73,6 +73,8 @@ public class SecurityConfig {
                 .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/safe-zones", "/api/safe-zones/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/weather", "/api/weather/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/heatmap", "/api/heatmap/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/reports/nearby").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

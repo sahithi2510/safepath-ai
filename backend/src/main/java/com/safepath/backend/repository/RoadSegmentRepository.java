@@ -14,7 +14,7 @@ import java.util.UUID;
 @Repository
 public interface RoadSegmentRepository extends JpaRepository<RoadSegment, UUID> {
 
-    @Query(value = "SELECT rs.* FROM road_segments rs WHERE ST_DWithin(rs.geometry, :location, :radiusMeters) AND rs.walkable = true", nativeQuery = true)
+    @Query(value = "SELECT rs.* FROM road_segments rs WHERE ST_DWithin(rs.geometry::geography, :location::geography, :radiusMeters) AND rs.walkable = true", nativeQuery = true)
     List<RoadSegment> findWalkableSegmentsWithinRadius(@Param("location") Point location, @Param("radiusMeters") double radiusMeters);
 
     @Query(value = "SELECT rs.* FROM road_segments rs ORDER BY rs.geometry <-> :location LIMIT 1", nativeQuery = true)
