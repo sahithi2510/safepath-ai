@@ -133,19 +133,20 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 | Column | Type | Constraints | Notes |
 |--------|------|-------------|-------|
 | `id` | UUID | PK | |
-| `user_id` | UUID | FK → users.id | |
+| `user_id` | UUID | FK → users.id, NOT NULL | Reporter identity (private) |
 | `report_type` | VARCHAR(50) | NOT NULL | harassment, poor_lighting, etc. |
-| `description` | TEXT | NULLABLE | |
-| `latitude` | DOUBLE PRECISION | NOT NULL | Reporter's location |
-| `longitude` | DOUBLE PRECISION | NOT NULL | |
-| `geometry` | GEOMETRY(Point, 4326) | NOT NULL | |
+| `description` | TEXT | NULLABLE | Max 1000 chars, sanitized |
+| `latitude` | DOUBLE PRECISION | NULLABLE | Reporter's confirmed location |
+| `longitude` | DOUBLE PRECISION | NULLABLE | Reporter's confirmed location |
+| `geometry` | GEOMETRY(Point, 4326) | NULLABLE | Point geometry when coordinates present |
+| `location_precision` | VARCHAR(30) | DEFAULT 'UNKNOWN' | EXACT_COORDINATE, UNKNOWN |
 | `road_segment_id` | UUID | FK → road_segments.id, NULLABLE | Nearest segment |
 | `status` | VARCHAR(20) | DEFAULT 'PENDING' | PENDING, VERIFIED, REJECTED |
-| `verified_by` | UUID | FK → users.id, NULLABLE | Admin |
+| `verified_by` | UUID | FK → users.id, NULLABLE | Moderator / Admin |
 | `verified_at` | TIMESTAMP WITH TIME ZONE | NULLABLE | |
-| `verification_note` | TEXT | NULLABLE | |
-| `incident_datetime` | TIMESTAMP WITH TIME ZONE | NULLABLE | When it happened |
-| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | |
+| `verification_note` | TEXT | NULLABLE | Audit note |
+| `incident_datetime` | TIMESTAMP WITH TIME ZONE | NULLABLE | When it happened (@PastOrPresent) |
+| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | Submission timestamp |
 
 **Indexes:**
 - `GIST(geometry)` — nearby reports

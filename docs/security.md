@@ -56,11 +56,19 @@ allowedHeaders = Authorization, Content-Type
 allowCredentials = false
 ```
 
-### Rate Limiting
+### Rate Limiting & Abuse Prevention
 
-> **IMPLEMENTATION CHOICE / FUTURE WORK:** Full rate limiting requires a token bucket implementation. For MVP, document the strategy:
-> - Authentication endpoints: max 10 requests/minute per IP (to be implemented)
-> - Route search: max 60 requests/minute per user (to be implemented)
+- **Community Report Submissions (`POST /api/reports`):**
+  - **Implemented in `ReportRateLimiterService`:** Thread-safe sliding-window rate limiter enforcing a maximum of **5 report submissions per 10 minutes** per authenticated user UUID.
+  - Exceeding the threshold triggers HTTP `429 Too Many Requests` with retry-after header calculation.
+  - Prevents automated spam, denial-of-service flooding, and false hazard report campaigns without requiring external caching layers.
+- **Authentication endpoints:** Max 10 requests/minute per IP (future edge proxy / gateway tier).
+- **Route search:** Max 60 requests/minute per user.
+
+### Privacy & PII Protection
+- **Reporter Identity Isolation:** In `CommunityReportService`, public queries (`GET /api/reports/nearby`) return only verified reports and strictly omit `user_id`, email, full name, or phone numbers.
+- **Location Consent:** Incident coordinates are optional and require explicit confirmation (`locationConfirmed: true`). If withheld, the record is stored with `UNKNOWN` spatial precision.
+- **Untrusted User Content:** Report descriptions are strictly capped at 1000 characters and stripped of HTML/script elements prior to persistence.
 
 ---
 

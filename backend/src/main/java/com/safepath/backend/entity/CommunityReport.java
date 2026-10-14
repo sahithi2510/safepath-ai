@@ -41,10 +41,10 @@ public class CommunityReport {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(nullable = false)
+    @Column
     private Double latitude;
 
-    @Column(nullable = false)
+    @Column
     private Double longitude;
 
     /**
@@ -53,6 +53,11 @@ public class CommunityReport {
      */
     @Column(columnDefinition = "geometry(Point,4326)")
     private Point geometry;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "location_precision", length = 30)
+    @Builder.Default
+    private LocationPrecision locationPrecision = LocationPrecision.UNKNOWN;
 
     @Column(name = "road_segment_id")
     private UUID roadSegmentId;
@@ -78,6 +83,10 @@ public class CommunityReport {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    public boolean hasLocation() {
+        return latitude != null && longitude != null && geometry != null;
+    }
+
     public enum ReportType {
         HARASSMENT,
         SUSPICIOUS_ACTIVITY,
@@ -93,5 +102,11 @@ public class CommunityReport {
         PENDING,
         VERIFIED,
         REJECTED
+    }
+
+    public enum LocationPrecision {
+        EXACT_COORDINATE,
+        LOCALITY,
+        UNKNOWN
     }
 }

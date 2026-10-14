@@ -20,20 +20,25 @@ public class CommunityReportDto {
         @NotNull(message = "Report type is required")
         private CommunityReport.ReportType reportType;
 
-        @Size(max = 2000, message = "Description must not exceed 2000 characters")
+        @Size(max = 1000, message = "Description must not exceed 1000 characters")
         private String description;
 
-        @NotNull(message = "Latitude is required")
         @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
         @DecimalMax(value = "90.0",  message = "Latitude must be <= 90")
         private Double latitude;
 
-        @NotNull(message = "Longitude is required")
         @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
         @DecimalMax(value = "180.0",  message = "Longitude must be <= 180")
         private Double longitude;
 
+        private Boolean locationConfirmed;
+
+        @PastOrPresent(message = "Incident time cannot be in the future")
         private OffsetDateTime incidentDatetime;
+
+        public boolean hasLocation() {
+            return latitude != null && longitude != null;
+        }
     }
 
     /** Response DTO for a community report. */
@@ -45,6 +50,7 @@ public class CommunityReportDto {
         private String description;
         private Double latitude;
         private Double longitude;
+        private CommunityReport.LocationPrecision locationPrecision;
         private CommunityReport.ReportStatus status;
         private OffsetDateTime incidentDatetime;
         private OffsetDateTime createdAt;
@@ -58,6 +64,7 @@ public class CommunityReportDto {
         private UUID id;
         private CommunityReport.ReportType reportType;
         private CommunityReport.ReportStatus status;
+        private CommunityReport.LocationPrecision locationPrecision;
         private OffsetDateTime createdAt;
         private String message;
     }

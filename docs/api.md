@@ -324,7 +324,11 @@ Retrieve road-segment geometries and relative-risk safety predictions within a g
 
 ### POST /api/reports
 
-Submit a community safety report.
+Submit a community safety report (authenticated user).
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Rate Limit:** Max 5 reports per user per rolling 10-minute window (exceeding returns HTTP 429).
 
 **Request:**
 ```json
@@ -333,11 +337,17 @@ Submit a community safety report.
   "description": "Street lights are broken near the junction",
   "latitude": 12.9750,
   "longitude": 77.5980,
-  "incidentDatetime": "2026-10-08T20:00:00+05:30"
+  "locationConfirmed": true,
+  "incidentDatetime": "2026-10-14T11:00:00Z"
 }
 ```
 
-`reportType` values: `HARASSMENT`, `SUSPICIOUS_ACTIVITY`, `POOR_LIGHTING`, `UNSAFE_ROAD`, `BROKEN_STREETLIGHT`, `CROWD_ISSUE`, `ROAD_BLOCKAGE`, `OTHER`
+**Field Rules:**
+- `reportType` (required): `HARASSMENT`, `SUSPICIOUS_ACTIVITY`, `POOR_LIGHTING`, `UNSAFE_ROAD`, `BROKEN_STREETLIGHT`, `CROWD_ISSUE`, `ROAD_BLOCKAGE`, `OTHER`
+- `description` (optional): Max 1000 characters. Untrusted text is sanitized.
+- `latitude`, `longitude` (optional): Must both be present or both omitted. Range $[-90, 90]$ and $[-180, 180]$.
+- `locationConfirmed` (optional): User explicit confirmation flag when coordinates are included.
+- `incidentDatetime` (optional): Past or present ISO 8601 timestamp. Future timestamps rejected.
 
 **Response 201:**
 ```json
@@ -345,59 +355,78 @@ Submit a community safety report.
   "id": "uuid",
   "reportType": "POOR_LIGHTING",
   "status": "PENDING",
-  "createdAt": "2026-10-08T12:00:00Z",
-  "message": "Report received. Thank you. It will be reviewed."
+  "locationPrecision": "EXACT_COORDINATE",
+  "createdAt": "2026-10-14T12:00:00Z",
+  "message": "Report received. Thank you. It has been submitted for verification."
 }
 ```
+
+**Errors:**
+- `400` — Validation failure (future timestamp, mismatched coordinates, description > 1000 chars)
+- `401` — Unauthorized (missing or expired JWT)
+- `429` — Rate limit exceeded (more than 5 reports in 10 minutes)
 
 ---
 
 ### GET /api/reports/nearby
 
-Get nearby verified reports.
+Get nearby verified reports. Only `VERIFIED` reports are returned; unverified reports are strictly excluded.
+Never exposes reporter identities (emails, names, phone numbers).
 
 **Query params:** `lat=12.97&lon=77.59&radiusMeters=500&limit=20`
 
 **Response 200:**
 ```json
-{
-  "reports": [
-    {
-      "id": "uuid",
-      "reportType": "POOR_LIGHTING",
-      "description": "...",
-      "latitude": 12.975,
-      "longitude": 77.598,
-      "status": "VERIFIED",
-      "distanceMeters": 120.5,
-      "createdAt": "2026-10-07T20:00:00Z"
-    }
-  ],
-  "count": 1
-}
+[
+  {
+    "id": "uuid",
+    "reportType": "POOR_LIGHTING",
+    "description": "Broken streetlight near intersection",
+    "latitude": 12.975,
+    "longitude": 77.598,
+    "locationPrecision": "EXACT_COORDINATE",
+    "status": "VERIFIED",
+    "distanceMeters": 120.5,
+    "incidentDatetime": "2026-10-14T10:00:00Z",
+    "createdAt": "2026-10-14T11:00:00Z"
+  }
+]
 ```
-
-Note: Only `VERIFIED` reports are returned in this endpoint.
 
 ---
 
 ### GET /api/reports/my
 
-Get current user's own reports (all statuses).
+Get current authenticated user's own reports (all statuses: `PENDING`, `VERIFIED`, `REJECTED`).
+
+**Headers:** `Authorization: Bearer <token>`
+**Query params:** `page=0&size=20`
+
+**Response 200:** Paginated list of user's own reports with review statuses.
 
 ---
 
-### PUT /api/reports/{id}/verify (ADMIN)
+### PUT /api/reports/{id}/verify (MODERATOR / ADMIN only)
 
-Verify or reject a report.
+Verify or reject a report. Reports already in terminal states cannot be re-verified.
+
+**Headers:** `Authorization: Bearer <token>` (User must have `ROLE_MODERATOR` or `ROLE_ADMIN`)
 
 **Request:**
 ```json
 {
   "status": "VERIFIED",
-  "verificationNote": "Confirmed by local patrol"
+  "verificationNote": "Confirmed by local municipal utility log"
 }
 ```
+
+**Response 200:** Updated report with `VERIFIED` or `REJECTED` status.
+
+**Errors:**
+- `400` — Invalid target status or report already processed
+- `401` — Unauthorized
+- `403` — Forbidden (insufficient permissions; caller is not moderator or admin)
+- `404` — Report not found
 
 ---
 

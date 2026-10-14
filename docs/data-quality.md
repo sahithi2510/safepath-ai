@@ -167,4 +167,19 @@ When the model is actually trained, document:
 
 ---
 
-*SafePath AI — data-quality.md — 2026-10-08*
+## 10. Community Reports & ML Ground Truth Isolation
+
+Community safety reports represent subjective, crowdsourced citizen submissions rather than validated official crime incident records.
+
+**Integrity Mandates:**
+1. **Separation from Crime Ingestion:** Unverified community reports (`PENDING`) must **never** be merged into the official crime dataset or used as ground-truth labels for ML model training.
+2. **Prohibition of Direct Score Modification:** An unverified report must not directly lower a road segment's safety score or artificially elevate edge costs in the routing engine.
+3. **Location Precision Taxonomy:**
+   - Reports submitted with explicit, confirmed coordinates are stored as `location_precision = EXACT_COORDINATE`.
+   - Reports submitted without coordinates are recorded as `location_precision = UNKNOWN`. The system strictly prohibits automated reverse-geocoding, IP-based approximation, or coordinate invention.
+4. **Public Query Filtering:** Public safety endpoints (`GET /api/reports/nearby`) return **only** records with `status = 'VERIFIED'`. Unverified submissions remain visible only to the original submitter and authorized moderation staff.
+
+---
+
+*SafePath AI — data-quality.md — Updated 2026-10-14*
+

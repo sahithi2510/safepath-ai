@@ -38,7 +38,7 @@
 | 18 | Risk-Aware A\* Routing | ✅ COMPLETE | Multi-objective cost, zero heuristic, deterministic tie-breaking |
 | 19 | Route Comparison | ✅ COMPLETE | 3-way comparison, duplicate detection, trade-off synthesis, mobile screen |
 | 20 | Safety Heatmap | ✅ COMPLETE | Viewport heatmap API, PostGIS spatial query, bounded batch ML inference, React Native overlay & legend |
-| 21 | Community Reports | ⬜ NOT STARTED | |
+| 21 | Community Reports | ✅ COMPLETE | Citizen reporting lifecycle, optional spatial attribution, sliding-window rate limiting, mobile submit & history UI |
 | 22 | Safe Zones | ⬜ NOT STARTED | |
 | 23 | Weather Integration | ⬜ NOT STARTED | |
 | 24 | Personalization | ⬜ NOT STARTED | |
@@ -558,6 +558,51 @@ None.
   - Created `docs/safety-heatmap.md`
   - Updated `docs/api.md` with `/api/heatmap` specification
 
+---
+
+## Milestone 21 — Community Reports
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement authenticated community report submission, optional spatial attribution, lifecycle verification status, abuse-prevention rate limiting, and mobile reporting experience.
+
+### Completed Tasks
+
+- [x] Database schema & migration (`V13__community_report_enhancements.sql`):
+  - Made `latitude`, `longitude`, and `geometry` nullable to support optional spatial attribution
+  - Added `location_precision VARCHAR(30) DEFAULT 'UNKNOWN'` column
+- [x] Entity & DTO enhancements (`CommunityReport`, `CommunityReportDto`):
+  - Added `LocationPrecision` enum (`EXACT_COORDINATE`, `LOCALITY`, `UNKNOWN`)
+  - Updated `CreateRequest` with optional coordinates, `@PastOrPresent` incident time validation, max 1000 character description limit, and `locationConfirmed` flag
+  - Ensured `Response` strictly protects reporter privacy by omitting user IDs, emails, names, or phone numbers
+- [x] Sliding-window rate limiter service (`ReportRateLimiterService`):
+  - Thread-safe in-memory sliding-window rate limiting enforcing maximum 5 submissions per 10 minutes per authenticated user UUID
+  - Returns HTTP 429 Too Many Requests with informative retry-after calculation when limit exceeded
+- [x] Backend service & controller (`CommunityReportService`, `CommunityReportController`):
+  - `POST /api/reports`: Authenticated submission with rate limiting, optional location handling, description sanitization, and automatic `PENDING` initial status
+  - `GET /api/reports/nearby`: Public spatial query returning **only** `VERIFIED` reports with geometries; never leaks unverified reports or reporter identities
+  - `GET /api/reports/my`: Authenticated user query returning their own submitted reports across all lifecycle statuses (`PENDING`, `VERIFIED`, `REJECTED`)
+  - `PUT /api/reports/{id}/verify`: Moderation transition endpoint restricted to `ROLE_MODERATOR` and `ROLE_ADMIN` (`@PreAuthorize`) enforcing valid transitions (`PENDING` $\to$ `VERIFIED` | `REJECTED`) and recording audit metadata (`verifiedBy`, `verifiedAt`, `verificationNote`)
+- [x] Data integrity & ML ground truth isolation:
+  - Documented strict isolation: unverified community reports (`PENDING`) never enter the crime ingestion dataset or affect ML models or A* routing weights
+  - Zero coordinate fabrication: unlocated reports retain `UNKNOWN` precision and null coordinates
+- [x] Mobile application experience (`mobile/services/reports.ts`, `mobile/app/(tabs)/reports.tsx`):
+  - Prominent emergency banner warning that reports are not an emergency dispatch mechanism (prompts dialing 112/100)
+  - 8 controlled category options with human-readable labels, descriptions, and icons
+  - Description input with live 1000-character counter
+  - Quick incident timing selector (Just Now, Past Hour, Earlier Today, Yesterday)
+  - Optional location toggle with explicit confirmation checkbox, foreground-only location access, and Bangalore sample location fallback
+  - Two-tab interface: "Submit Report" and "My Reports" history view with color-coded status pills
+  - Submission validation, loading spinners, success confirmation with reference ID, and retryable error banners
+- [x] Automated test suites:
+  - Backend unit & integration tests: **71 passed out of 71 tests** (added `CommunityReportServiceTest` [10 tests] and `CommunityReportControllerTest` [4 tests])
+  - Mobile TypeScript compilation (`npx tsc --noEmit`): **0 errors** across entire codebase
+  - Python / FastAPI ML tests: **15 passed out of 15 tests** with 100% success rate
+  - Total workspace tests: **143 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/community-reports.md`
+  - Updated `docs/api.md`, `docs/database.md`, `docs/security.md`, and `docs/data-quality.md`
+
+
 
 ---
 
@@ -608,6 +653,11 @@ None.
 | 2026-10-13 | Dashed Gray Neutral Treatment for Unscored Segments | Clearly signals missing data or offline ML status without confusing users or asserting safety |
 | 2026-10-13 | Multi-Representation Geometry Serialization | Exposes both GeoJSON LineString and mobile coordinate lists for seamless cross-platform consumption |
 | 2026-10-13 | Dual-Screen Route & Heatmap Coexistence | Supports heatmap underlays on both the primary map screen and the route comparison screen |
+| 2026-10-14 | Sliding-Window In-Memory Rate Limiting | Enforces max 5 reports per 10 min without requiring external caching infrastructure (Redis) |
+| 2026-10-14 | Nullable Spatial Attribution for Community Reports | Honors optional location consent without inventing coordinates or breaking database constraints |
+| 2026-10-14 | Strict Public Query Filtering to VERIFIED Status | Prevents unverified, malicious, or erroneous community reports from appearing on public maps |
+| 2026-10-14 | Reporter PII Scrubbing at Service Layer | Omits user account details from public responses to prevent stalking or deanonymization |
+| 2026-10-14 | One-Way Review Lifecycle State Transitions | Permits only PENDING -> VERIFIED and PENDING -> REJECTED to prevent status flipping |
 
 
 
