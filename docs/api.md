@@ -506,6 +506,81 @@ Get detailed metadata for a specific safe zone facility.
 
 ---
 
+## 5.1 Weather Context
+
+Weather endpoints provide ambient environmental conditions (temperature, precipitation, wind speed, relative humidity, visibility, condition, and forecast probability). All endpoints are publicly accessible without authentication.
+
+### GET /api/weather
+
+Get ambient weather conditions for a validated geographic location.
+
+**Query Parameters:**
+- `lat` (double, required): -90.0 to 90.0
+- `lon` (double, required): -180.0 to 180.0
+
+**Response 200 (Success):**
+```json
+{
+  "latitude": 12.9716,
+  "longitude": 77.5946,
+  "available": true,
+  "observation": {
+    "temperatureC": 24.5,
+    "precipitationMm": 0.5,
+    "windSpeedKmh": 12.3,
+    "relativeHumidity": 68.0,
+    "visibilityKm": 18.5,
+    "weatherCode": 61,
+    "condition": "Slight rain",
+    "icon": "weather-rainy",
+    "isDay": true,
+    "observedAt": "2026-10-14T12:00"
+  },
+  "forecast": {
+    "precipitationProbabilityPercent": 20.0,
+    "forecastTimestamp": "2026-10-14T12:00"
+  },
+  "units": {
+    "temperature": "°C",
+    "precipitation": "mm",
+    "windSpeed": "km/h",
+    "relativeHumidity": "%",
+    "visibility": "km",
+    "precipitationProbability": "%"
+  },
+  "source": "Open-Meteo (open-meteo.com)",
+  "retrievedAt": "2026-10-14T12:00:30Z",
+  "cached": false,
+  "disclaimer": "Weather context represents ambient environmental conditions (temperature, precipitation, wind, visibility) from Open-Meteo. It does not measure personal safety or crime risk directly."
+}
+```
+
+**Response 200 (Provider Unavailable / Degradation):**
+```json
+{
+  "latitude": 12.9716,
+  "longitude": 77.5946,
+  "available": false,
+  "message": "Weather data temporarily unavailable from provider.",
+  "units": {
+    "temperature": "°C",
+    "precipitation": "mm",
+    "windSpeed": "km/h",
+    "relativeHumidity": "%",
+    "visibility": "km",
+    "precipitationProbability": "%"
+  },
+  "source": "Open-Meteo (open-meteo.com)",
+  "retrievedAt": "2026-10-14T12:00:30Z",
+  "disclaimer": "Weather context represents ambient environmental conditions (temperature, precipitation, wind, visibility) from Open-Meteo. It does not measure personal safety or crime risk directly."
+}
+```
+
+**Errors:**
+- `400 Bad Request` — Coordinates out of bounds (latitude not in [-90, 90], longitude not in [-180, 180], or missing parameters).
+
+---
+
 ## 6. Emergency Contacts
 
 ### GET /api/emergency/contacts

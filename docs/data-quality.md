@@ -191,7 +191,16 @@ Safe zones represent public assistance infrastructure (police stations, hospital
    - `UNVERIFIED`: Imported from crowdsourced open spatial data (OpenStreetMap) without individual ground audit.
    - `UNAVAILABLE`: Facility reported inactive, closed, or status unknown.
 4. **Existence vs Operational Availability:** Physical existence in OpenStreetMap or administrative registries does not imply active staffing or guaranteed personal safety. All user interfaces and DTOs present prominent disclaimers advising users to contact 112/100/911 in active emergencies.
-5. **Honest Empty Sets:** If no trustworthy facilities exist within a requested bounding box or proximity radius, the service returns an empty list (`[]`). Facilities are never approximated or substituted with arbitrary commercial establishments.
+## 12. Weather Data Quality & Environmental Context
+
+Weather context reflects ambient environmental observations and forecasts from Open-Meteo.
+
+**Integrity Mandates:**
+1. **Zero Weather Fabrication:** Do NOT fabricate temperature, rainfall, wind speed, or visibility values. When external data is unreachable, fields must remain `null` (or `available = false`).
+2. **Environmental Context vs. Safety Causation:** Ambient weather (rain, cold, cloud cover) is an environmental condition affecting pedestrian comfort and visibility, NOT direct evidence that a street segment is safe or unsafe.
+3. **No Retraining or False Metric Claims:** Integrating weather into feature inputs does NOT imply empirical predictive validation. Model metrics must reflect actual evaluation on real co-located data.
+4. **Observation vs. Forecast Separation:** Current observations (`observation`) are strictly partitioned from future forecast projections (`forecast`). Forecast values must never be presented as current measurements.
+5. **Spatial-Temporal Quantization:** Coordinates are quantized to 2 decimal places (~1.1 km) to match atmospheric model resolution and prevent excessive provider polling.
 
 ---
 

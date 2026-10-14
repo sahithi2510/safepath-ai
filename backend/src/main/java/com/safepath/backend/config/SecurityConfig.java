@@ -72,6 +72,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/safe-zones", "/api/safe-zones/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/weather", "/api/weather/**").permitAll()
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())

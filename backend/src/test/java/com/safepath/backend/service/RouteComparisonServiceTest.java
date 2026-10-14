@@ -1,6 +1,7 @@
 package com.safepath.backend.service;
 
 import com.safepath.backend.dto.RouteDto;
+import com.safepath.backend.dto.weather.WeatherDto;
 import com.safepath.backend.dto.ml.PredictRiskRequestDto;
 import com.safepath.backend.dto.ml.PredictRiskResponseDto;
 import com.safepath.backend.entity.RoadSegment;
@@ -67,6 +68,9 @@ class RouteComparisonServiceTest {
 
     @Mock
     private RoadSegmentFeatureService roadSegmentFeatureService;
+
+    @Mock
+    private WeatherService weatherService;
 
     @InjectMocks
     private RouteService routeService;
@@ -141,7 +145,7 @@ class RouteComparisonServiceTest {
         when(roadSegmentFeatureService.resolveSegmentId(directFastSegment)).thenReturn(directKey);
         when(roadSegmentFeatureService.resolveSegmentId(detourSafeSegment)).thenReturn(detourKey);
 
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any())).thenReturn(List.of(
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any())).thenReturn(List.of(
                 PredictRiskRequestDto.builder().segmentId(directKey).build(),
                 PredictRiskRequestDto.builder().segmentId(detourKey).build()
         ));
@@ -237,7 +241,7 @@ class RouteComparisonServiceTest {
 
         String directKey = directFastSegment.getId().toString();
         when(roadSegmentFeatureService.resolveSegmentId(directFastSegment)).thenReturn(directKey);
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any())).thenReturn(List.of(
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any())).thenReturn(List.of(
                 PredictRiskRequestDto.builder().segmentId(directKey).build()
         ));
 
@@ -294,7 +298,7 @@ class RouteComparisonServiceTest {
         when(roadSegmentRepository.findNearestSegment(startPoint)).thenReturn(directFastSegment);
         when(roadSegmentRepository.findNearestSegment(endPoint)).thenReturn(directFastSegment);
 
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any())).thenReturn(List.of(
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any())).thenReturn(List.of(
                 PredictRiskRequestDto.builder().segmentId("seg-1").build()
         ));
 
@@ -359,5 +363,97 @@ class RouteComparisonServiceTest {
         assertThatThrownBy(() -> routeService.searchRoutes("traveler@example.com", request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Origin and Destination coordinates (latitude and longitude) are required");
+    }
+
+    @Test
+    @DisplayName("searchRoutes propagates weather features and sets weatherContextAvailable flag when weather is present")
+    void testSearchRoutes_WithWeatherContextAvailable() {
+        RouteDto.SearchRequest request = RouteDto.SearchRequest.builder()
+                .startLat(12.9716).startLon(77.5946)
+                .endLat(12.9750).endLon(77.5990)
+                .build();
+
+        List<RoadSegment> localNetwork = List.of(directFastSegment);
+        when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble())).thenReturn(localNetwork);
+        when(roadSegmentRepository.findNearestSegment(startPoint)).thenReturn(directFastSegment);
+        when(roadSegmentRepository.findNearestSegment(endPoint)).thenReturn(directFastSegment);
+
+        String directKey = directFastSegment.getId().toString();
+        when(roadSegmentFeatureService.resolveSegmentId(directFastSegment)).thenReturn(directKey);
+
+        WeatherDto mockWeather = WeatherDto.builder()
+                .available(true)
+                .observation(WeatherDto.CurrentObservation.builder()
+                        .temperatureC(26.0)
+                        .precipitationMm(1.5)
+                        .visibilityKm(10.0)
+                        .build())
+                .build();
+        when(weatherService.getWeather(12.9716, 77.5946)).thenReturn(mockWeather);
+
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), eq(1.5), eq(10.0))).thenReturn(List.of(
+                PredictRiskRequestDto.builder().segmentId(directKey).build()
+        ));
+
+        when(mlServiceClient.predictRiskBatch(anyList())).thenReturn(Map.of(
+                directKey, PredictRiskResponseDto.builder()
+                        .segmentId(directKey)
+                        .riskScore(0.20)
+                        .safetyScore(0.80)
+                        .riskLevel("LOW")
+                        .build()
+        ));
+
+        when(aStarRoutingEngine.findRoute(anyLong(), anyLong(), any(), anyMap(), anyMap()))
+                .thenReturn(List.of(directFastSegment));
+
+        RouteDto.SearchResponse response = routeService.searchRoutes("traveler@example.com", request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.isWeatherContextAvailable()).isTrue();
+        verify(roadSegmentFeatureService).prepareBatchRequests(anyList(), any(), eq(1.5), eq(10.0));
+    }
+
+    @Test
+    @DisplayName("searchRoutes succeeds safely with weatherContextAvailable=false when weather provider fails")
+    void testSearchRoutes_WeatherProviderFailure_NeverBlocksRouting() {
+        RouteDto.SearchRequest request = RouteDto.SearchRequest.builder()
+                .startLat(12.9716).startLon(77.5946)
+                .endLat(12.9750).endLon(77.5990)
+                .build();
+
+        List<RoadSegment> localNetwork = List.of(directFastSegment);
+        when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble())).thenReturn(localNetwork);
+        when(roadSegmentRepository.findNearestSegment(startPoint)).thenReturn(directFastSegment);
+        when(roadSegmentRepository.findNearestSegment(endPoint)).thenReturn(directFastSegment);
+
+        String directKey = directFastSegment.getId().toString();
+        when(roadSegmentFeatureService.resolveSegmentId(directFastSegment)).thenReturn(directKey);
+
+        when(weatherService.getWeather(anyDouble(), anyDouble()))
+                .thenThrow(new com.safepath.backend.exception.WeatherClientException("Open-Meteo connection timeout"));
+
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), isNull(), isNull())).thenReturn(List.of(
+                PredictRiskRequestDto.builder().segmentId(directKey).build()
+        ));
+
+        when(mlServiceClient.predictRiskBatch(anyList())).thenReturn(Map.of(
+                directKey, PredictRiskResponseDto.builder()
+                        .segmentId(directKey)
+                        .riskScore(0.20)
+                        .safetyScore(0.80)
+                        .riskLevel("LOW")
+                        .build()
+        ));
+
+        when(aStarRoutingEngine.findRoute(anyLong(), anyLong(), any(), anyMap(), anyMap()))
+                .thenReturn(List.of(directFastSegment));
+
+        RouteDto.SearchResponse response = routeService.searchRoutes("traveler@example.com", request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.isWeatherContextAvailable()).isFalse();
+        assertThat(response.getFastestRoute()).isNotNull();
+        assertThat(response.getSafestRoute()).isNotNull();
     }
 }

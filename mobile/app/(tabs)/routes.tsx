@@ -15,6 +15,7 @@ import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { api } from '../../services/api';
 import { fetchHeatmap, HeatmapSegment } from '../../services/heatmap';
+import { WeatherWidget } from '../../components/WeatherWidget';
 
 export interface Coordinate {
   latitude: number;
@@ -352,6 +353,27 @@ export default function RoutesScreen() {
               </Text>
             </View>
           )}
+
+          {/* Weather Status Banner */}
+          <View
+            style={searchResponse.weatherContextAvailable ? styles.weatherActiveBanner : styles.weatherInactiveBanner}
+            accessibilityRole="summary"
+          >
+            <Text style={searchResponse.weatherContextAvailable ? styles.weatherActiveText : styles.weatherInactiveText}>
+              {searchResponse.weatherContextAvailable
+                ? '🌦️ Weather Context Active: Environmental parameters (precipitation, visibility) integrated into risk inference.'
+                : '☁️ Weather Context Inactive: Standard environmental defaults applied (does not block routing).'}
+            </Text>
+          </View>
+
+          {/* Ambient Departure Weather Context */}
+          <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+            <WeatherWidget
+              latitude={parseFloat(startLat) || 12.9756}
+              longitude={parseFloat(startLon) || 77.6066}
+              compact={true}
+            />
+          </View>
 
           {/* Trade-off Explanation Card */}
           <Card style={styles.tradeOffCard} accessibilityRole="summary">
@@ -745,6 +767,34 @@ const styles = StyleSheet.create({
   mlWarningText: {
     fontSize: 13,
     color: '#D70015',
+    fontWeight: '500',
+  },
+  weatherActiveBanner: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 8,
+  },
+  weatherActiveText: {
+    fontSize: 12,
+    color: '#1E40AF',
+    fontWeight: '500',
+  },
+  weatherInactiveBanner: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 8,
+  },
+  weatherInactiveText: {
+    fontSize: 12,
+    color: '#6B7280',
     fontWeight: '500',
   },
   tradeOffCard: {

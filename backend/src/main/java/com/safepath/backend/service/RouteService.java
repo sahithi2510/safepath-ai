@@ -47,6 +47,7 @@ public class RouteService {
     private final AStarRoutingEngine aStarRoutingEngine;
     private final MlServiceClient mlServiceClient;
     private final RoadSegmentFeatureService roadSegmentFeatureService;
+    private final WeatherService weatherService;
 
     @Transactional
     public RouteResponseDto planRoute(String userEmail, RouteRequestDto requestDto) {
@@ -102,8 +103,24 @@ public class RouteService {
             Map<String, Double> riskScores = new HashMap<>();
             Map<String, PredictRiskResponseDto> predictionsMap = Collections.emptyMap();
 
+            // Retrieve ambient weather context (non-blocking)
+            Double precipMm = null;
+            Double visibilityKm = null;
             try {
-                List<PredictRiskRequestDto> batchRequests = roadSegmentFeatureService.prepareBatchRequests(localSegments, LocalDateTime.now());
+                if (requestDto.getStartLat() != null && requestDto.getStartLon() != null) {
+                    var weather = weatherService.getWeather(requestDto.getStartLat(), requestDto.getStartLon());
+                    if (weather != null && weather.isAvailable() && weather.getObservation() != null) {
+                        precipMm = weather.getObservation().getPrecipitationMm();
+                        visibilityKm = weather.getObservation().getVisibilityKm();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Weather context lookup failed during planRoute (proceeding without weather): {}", e.getMessage());
+            }
+
+            try {
+                List<PredictRiskRequestDto> batchRequests = roadSegmentFeatureService.prepareBatchRequests(
+                        localSegments, LocalDateTime.now(), precipMm, visibilityKm);
                 predictionsMap = mlServiceClient.predictRiskBatch(batchRequests);
 
                 for (Map.Entry<String, PredictRiskResponseDto> entry : predictionsMap.entrySet()) {
@@ -269,6 +286,22 @@ public class RouteService {
             throw new NoRouteFoundException("Could not connect origin or destination to the local road network.");
         }
 
+        // 2b. Attempt to retrieve ambient weather context at origin (non-blocking)
+        Double precipMm = null;
+        Double visibilityKm = null;
+        boolean weatherContextAvailable = false;
+        try {
+            var weather = weatherService.getWeather(startLat, startLon);
+            if (weather != null && weather.isAvailable() && weather.getObservation() != null) {
+                precipMm = weather.getObservation().getPrecipitationMm();
+                visibilityKm = weather.getObservation().getVisibilityKm();
+                weatherContextAvailable = true;
+            }
+        } catch (Exception e) {
+            log.warn("Weather context lookup failed during route search (proceeding without weather): {}", e.getMessage());
+            weatherContextAvailable = false;
+        }
+
         // 3. Batch predict ML risks for local road segments (once)
         Map<String, Double> riskScores = new HashMap<>();
         Map<String, PredictRiskResponseDto> predictionsMap = Collections.emptyMap();
@@ -277,7 +310,8 @@ public class RouteService {
         String modelVersion = null;
 
         try {
-            List<PredictRiskRequestDto> batchRequests = roadSegmentFeatureService.prepareBatchRequests(localSegments, LocalDateTime.now());
+            List<PredictRiskRequestDto> batchRequests = roadSegmentFeatureService.prepareBatchRequests(
+                    localSegments, LocalDateTime.now(), precipMm, visibilityKm);
             predictionsMap = mlServiceClient.predictRiskBatch(batchRequests);
 
             for (Map.Entry<String, PredictRiskResponseDto> entry : predictionsMap.entrySet()) {
@@ -408,7 +442,7 @@ public class RouteService {
                 .distinctRouteCount(distinctCount)
                 .computedAt(OffsetDateTime.now())
                 .mlServiceAvailable(mlServiceAvailable)
-                .weatherContextAvailable(false)
+                .weatherContextAvailable(weatherContextAvailable)
                 .notes(mlServiceAvailable ? "Evaluated with machine learning risk inference" : "Calculated without ML risk inference (fallback heuristics)")
                 .build();
     }

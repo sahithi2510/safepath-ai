@@ -121,4 +121,36 @@ class RoadSegmentFeatureServiceTest {
         assertThat(requests.get(1).getFeatures().getActivityProxy()).isEqualTo(0.4);
         assertThat(requests.get(1).getFeatures().getLightingScore()).isEqualTo(0.0);
     }
+
+    @Test
+    @DisplayName("extractFeatures populates weather precipitation and visibility when observed")
+    void testExtractFeatures_WithWeatherContext() {
+        RoadSegment segment = new RoadSegment();
+        segment.setId(UUID.randomUUID());
+        segment.setRoadType("primary");
+        segment.setIsLit(true);
+
+        LocalDateTime now = LocalDateTime.of(2026, 10, 14, 15, 30);
+        RiskFeaturesDto features = featureService.extractFeatures(segment, now, 2.5, 8.0);
+
+        assertThat(features).isNotNull();
+        assertThat(features.getWeatherPrecipitation()).isEqualTo(2.5);
+        assertThat(features.getWeatherVisibility()).isEqualTo(8.0);
+    }
+
+    @Test
+    @DisplayName("extractFeatures and prepareBatchRequests leave weather features null when weather is unobserved")
+    void testExtractFeatures_UnobservedWeatherLeavesNull() {
+        RoadSegment segment = new RoadSegment();
+        segment.setId(UUID.randomUUID());
+
+        RiskFeaturesDto features = featureService.extractFeatures(segment, LocalDateTime.now(), null, null);
+        assertThat(features.getWeatherPrecipitation()).isNull();
+        assertThat(features.getWeatherVisibility()).isNull();
+
+        List<PredictRiskRequestDto> requests = featureService.prepareBatchRequests(
+                List.of(segment), LocalDateTime.now(), null, null);
+        assertThat(requests.get(0).getFeatures().getWeatherPrecipitation()).isNull();
+        assertThat(requests.get(0).getFeatures().getWeatherVisibility()).isNull();
+    }
 }

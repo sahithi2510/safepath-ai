@@ -235,6 +235,7 @@ com.safepath.backend
 ├── security/         JWT, Spring Security config
 ├── routing/          A*, Dijkstra, graph model
 ├── ml/               ML service client
+├── service/weather/  Weather integration (Open-Meteo client, spatial caching)
 ├── exception/        Custom exceptions, global handler
 ├── config/           Beans, CORS, Swagger
 └── util/             Utilities

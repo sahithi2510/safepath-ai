@@ -35,6 +35,19 @@ public class RoadSegmentFeatureService {
      * @return 15-feature DTO
      */
     public RiskFeaturesDto extractFeatures(RoadSegment segment, LocalDateTime dateTime) {
+        return extractFeatures(segment, dateTime, null, null);
+    }
+
+    /**
+     * Extracts a RiskFeaturesDto from a RoadSegment for a specific evaluation timestamp with optional weather context.
+     *
+     * @param segment         road segment entity
+     * @param dateTime        reference evaluation time
+     * @param precipitationMm precipitation in mm (or null if unobserved)
+     * @param visibilityKm    visibility in km (or null if unobserved)
+     * @return 15-feature DTO
+     */
+    public RiskFeaturesDto extractFeatures(RoadSegment segment, LocalDateTime dateTime, Double precipitationMm, Double visibilityKm) {
         if (segment == null) {
             return new RiskFeaturesDto();
         }
@@ -57,7 +70,9 @@ public class RoadSegmentFeatureService {
                 .dayOfWeek(dayOfWeek)
                 .lightingScore(lightingScore)
                 .activityProxy(activityProxy)
-                // Spatial density, emergency proximities, weather, and reports are left null
+                .weatherPrecipitation(precipitationMm)
+                .weatherVisibility(visibilityKm)
+                // Spatial density, emergency proximities, and reports are left null
                 // when unobserved so the ML service applies documented defaults and tracks imputation.
                 .build();
     }
@@ -70,6 +85,19 @@ public class RoadSegmentFeatureService {
      * @return list of prediction requests with stable segment identifiers
      */
     public List<PredictRiskRequestDto> prepareBatchRequests(List<RoadSegment> segments, LocalDateTime dateTime) {
+        return prepareBatchRequests(segments, dateTime, null, null);
+    }
+
+    /**
+     * Prepares batch prediction requests for a collection of road segments with weather context.
+     *
+     * @param segments        collection of road segments
+     * @param dateTime        reference evaluation timestamp
+     * @param precipitationMm precipitation in mm (or null if unobserved)
+     * @param visibilityKm    visibility in km (or null if unobserved)
+     * @return list of prediction requests with stable segment identifiers
+     */
+    public List<PredictRiskRequestDto> prepareBatchRequests(List<RoadSegment> segments, LocalDateTime dateTime, Double precipitationMm, Double visibilityKm) {
         if (segments == null || segments.isEmpty()) {
             return Collections.emptyList();
         }
@@ -77,7 +105,7 @@ public class RoadSegmentFeatureService {
         List<PredictRiskRequestDto> requests = new ArrayList<>(segments.size());
         for (RoadSegment segment : segments) {
             String segmentId = resolveSegmentId(segment);
-            RiskFeaturesDto features = extractFeatures(segment, dateTime);
+            RiskFeaturesDto features = extractFeatures(segment, dateTime, precipitationMm, visibilityKm);
             requests.add(PredictRiskRequestDto.builder()
                     .segmentId(segmentId)
                     .features(features)

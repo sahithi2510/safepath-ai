@@ -26,6 +26,7 @@ import {
   VERIFICATION_CONFIG as SAFE_ZONE_VERIFICATION,
   fetchSafeZonesInViewport,
 } from '../../services/safeZones';
+import { WeatherWidget } from '../../components/WeatherWidget';
 
 const DEFAULT_REGION: Region = {
   latitude: 12.9756,
@@ -323,6 +324,11 @@ export default function MapScreen() {
                 <Text style={styles.demoBadgeText}>DEMO ML MODEL</Text>
               </View>
             )}
+            <WeatherWidget
+              latitude={currentRegion.latitude}
+              longitude={currentRegion.longitude}
+              compact={true}
+            />
             <TouchableOpacity
               style={styles.directoryHeaderBadge}
               onPress={() => router.push('/safe-zones')}

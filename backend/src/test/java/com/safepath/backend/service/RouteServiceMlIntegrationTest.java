@@ -59,6 +59,9 @@ class RouteServiceMlIntegrationTest {
     @Mock
     private RoadSegmentFeatureService roadSegmentFeatureService;
 
+    @Mock
+    private WeatherService weatherService;
+
     @InjectMocks
     private RouteService routeService;
 
@@ -119,7 +122,7 @@ class RouteServiceMlIntegrationTest {
 
         String segIdStr = testSegment.getId().toString();
         when(roadSegmentFeatureService.resolveSegmentId(testSegment)).thenReturn(segIdStr);
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any()))
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any()))
                 .thenReturn(List.of(PredictRiskRequestDto.builder().segmentId(segIdStr).build()));
 
         PredictRiskResponseDto prediction = PredictRiskResponseDto.builder()
@@ -161,7 +164,7 @@ class RouteServiceMlIntegrationTest {
         when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble()))
                 .thenReturn(List.of(testSegment));
         when(roadSegmentRepository.findNearestSegment(any())).thenReturn(testSegment);
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any()))
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any()))
                 .thenReturn(List.of(PredictRiskRequestDto.builder().segmentId("seg-1").build()));
 
         when(mlServiceClient.predictRiskBatch(anyList()))
@@ -188,7 +191,7 @@ class RouteServiceMlIntegrationTest {
         when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble()))
                 .thenReturn(List.of(testSegment));
         when(roadSegmentRepository.findNearestSegment(any())).thenReturn(testSegment);
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any()))
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any()))
                 .thenReturn(List.of(PredictRiskRequestDto.builder().segmentId("seg-1").build()));
 
         when(mlServiceClient.predictRiskBatch(anyList()))
@@ -221,7 +224,7 @@ class RouteServiceMlIntegrationTest {
         when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble()))
                 .thenReturn(List.of(testSegment));
         when(roadSegmentRepository.findNearestSegment(any())).thenReturn(testSegment);
-        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any()))
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any()))
                 .thenReturn(List.of(PredictRiskRequestDto.builder().segmentId("seg-1").build()));
 
         when(mlServiceClient.predictRiskBatch(anyList()))

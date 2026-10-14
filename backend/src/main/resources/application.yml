@@ -148,6 +148,14 @@ safepath:
   # Demo mode flag
   demo-mode: ${DEMO_MODE:false}
 
+  # Weather integration configuration (Open-Meteo)
+  weather:
+    base-url: ${WEATHER_API_BASE_URL:https://api.open-meteo.com/v1}
+    connect-timeout-ms: ${WEATHER_CONNECT_TIMEOUT_MS:3000}
+    timeout-ms: ${WEATHER_TIMEOUT_MS:4000}
+    cache-ttl-minutes: ${WEATHER_CACHE_TTL_MINUTES:30}
+    enabled: ${WEATHER_ENABLED:true}
+
 # ----------------------------------------------------------
 # Logging
 # ----------------------------------------------------------

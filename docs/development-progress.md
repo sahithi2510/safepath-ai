@@ -666,6 +666,52 @@ None.
 
 ---
 
+## Milestone 23 — Weather Integration
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement Open-Meteo typed weather client, spatial-temporal caching, PostGIS persistence, feature extraction integration, routing fault tolerance, and mobile weather display.
+
+### Completed Tasks
+
+- [x] Database schema & migration (`V15__weather_enhancements.sql`):
+  - Added `wind_speed_kmh`, `relative_humidity`, and `weather_description` to `weather_observations`
+  - Created index on `source` column
+- [x] Typed Open-Meteo REST client (`OpenMeteoClient`, `OpenMeteoClientImpl`):
+  - Uses Spring 6 `RestClient` with configurable connection (3,000 ms) and read (4,000 ms) timeouts
+  - Geographic coordinate validation rejecting out-of-bounds inputs
+  - Robust exception mapping: wraps timeouts and 4xx/5xx provider errors into `WeatherClientException`
+- [x] In-memory caching & PostGIS persistence service (`WeatherService`):
+  - Quantized cache keys (`%.2f, %.2f` ~1.1 km grid) with 30-minute configurable TTL
+  - Persistent storage in PostGIS `weather_observations` table for historical auditability and offline fallback
+  - Transparent fallback: serves recent DB observation (< 3h) when provider is temporarily unreachable
+  - Honest missing data: returns `available: false` with non-null academic disclaimer without fabricating measurements
+- [x] REST controller & public endpoints (`WeatherController`, `SecurityConfig`):
+  - `GET /api/weather?lat={lat}&lon={lon}` with Bean Validation constraints
+  - Configured public permit in `SecurityConfig` without authentication barriers
+- [x] Road-segment feature extraction integration (`RoadSegmentFeatureService`):
+  - Overloaded `extractFeatures` and `prepareBatchRequests` with optional precipitation and visibility parameters
+  - Populates features #13 (`weather_precipitation`) and #14 (`weather_visibility`) in 15-feature schema
+  - Unobserved weather remains null to trigger documented ML imputation
+- [x] Route scoring integration & fault tolerance (`RouteService`):
+  - Fetches ambient weather at origin and passes parameters to feature extractor
+  - Flags `weatherContextAvailable` truthfully in route search and comparison responses
+  - Non-blocking failure: weather outages never prevent routing; FASTEST route remains independent of ML, while BALANCED and SAFEST use standard defaults
+- [x] Mobile UI integration (`mobile/services/weather.ts`, `mobile/components/WeatherWidget.tsx`, `mobile/app/(tabs)/index.tsx`, `mobile/app/(tabs)/routes.tsx`):
+  - Compact pill in floating map header showing current weather emoji and temperature
+  - Expandable detailed card displaying observation metrics (temp, precip, wind, humidity, visibility), forecast probability badge, source attribution, and disclaimer
+  - Weather integration status banner on Route Comparison screen
+  - Loading, error, unavailable, and retry states
+- [x] Automated test suites:
+  - Backend tests: **104 passed out of 104 tests** (added `OpenMeteoClientTest` [5 tests], `WeatherServiceTest` [6 tests], `WeatherControllerTest` [2 tests], `RoadSegmentFeatureServiceTest` [2 new tests], `RouteComparisonServiceTest` [2 new tests])
+  - Mobile TypeScript compilation (`tsc.cmd --noEmit`): **0 errors** across entire codebase
+  - Python / FastAPI ML tests: **15 passed out of 15 tests** with 100% success rate
+  - Total workspace tests: **176 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/weather-integration.md`
+  - Updated `docs/api.md`, `docs/data-quality.md`, `docs/architecture.md`, and `docs/development-progress.md`
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
@@ -688,6 +734,10 @@ None.
 | 2026-10-14 | Separation of Existence vs Operational Staffing | Clarifies that verified registry existence does not guarantee real-time facility staffing or personal safety |
 | 2026-10-14 | Public Barrier-Free Access for Safe Zones | Eliminates JWT authentication requirements on GET /api/safe-zones to ensure immediate emergency access |
 | 2026-10-14 | Multi-Layer Coexistence on Interactive Map | Enables concurrent display of safe zone category pins, route polylines, and safety heatmap segments |
+| 2026-10-14 | Spatial-Temporal Quantization (~1.1 km Grid) for Weather | Cache key quantization to 2 decimal places prevents excessive API requests matching atmospheric model resolution |
+| 2026-10-14 | Non-Blocking Routing on Weather Failure | Prevents external provider outages from interrupting critical pedestrian routing; FASTEST runs ML-independently |
+| 2026-10-14 | Strict Separation of Weather Observation vs Forecast | Prevents misrepresenting forward-looking precipitation probabilities as present environmental observations |
+| 2026-10-14 | Environmental Context vs Crime Causation Charter | Weather is treated strictly as an environmental context indicator, never as proof of street crime risk |
 | 2026-10-11 | Class imbalance weighting (balanced) | Accommodates minority high-risk road segment distribution |
 | 2026-10-11 | Explicit synthetic evaluation flagging | Prevents mock fixture test metrics from ever being misrepresented as real-world accuracy |
 | 2026-10-12 | XGBoost scale_pos_weight calculation | Balances gradient updates across minority positive crime risk instances |
