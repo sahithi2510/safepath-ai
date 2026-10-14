@@ -158,23 +158,27 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 | Column | Type | Constraints | Notes |
 |--------|------|-------------|-------|
-| `id` | UUID | PK | |
-| `name` | VARCHAR(255) | NOT NULL | |
+| `id` | UUID | PK | Stable unique identifier |
+| `name` | VARCHAR(255) | NOT NULL | Facility name |
 | `zone_type` | VARCHAR(50) | NOT NULL | POLICE_STATION, HOSPITAL, PHARMACY, PUBLIC_TRANSPORT, OTHER |
-| `latitude` | DOUBLE PRECISION | NOT NULL | |
-| `longitude` | DOUBLE PRECISION | NOT NULL | |
-| `geometry` | GEOMETRY(Point, 4326) | NOT NULL | |
-| `address` | TEXT | NULLABLE | |
-| `phone_number` | VARCHAR(20) | NULLABLE | |
-| `operating_hours` | VARCHAR(255) | NULLABLE | |
-| `osm_node_id` | BIGINT | NULLABLE | OpenStreetMap source |
-| `is_24h` | BOOLEAN | NULLABLE | |
-| `source` | VARCHAR(100) | NULLABLE | osm, manual, etc. |
-| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | |
-| `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | |
+| `verification_status` | VARCHAR(20) | NOT NULL, DEFAULT 'UNVERIFIED' | VERIFIED, UNVERIFIED, UNAVAILABLE |
+| `latitude` | DOUBLE PRECISION | NOT NULL | WGS84 Latitude [-90, 90] |
+| `longitude` | DOUBLE PRECISION | NOT NULL | WGS84 Longitude [-180, 180] |
+| `geometry` | GEOMETRY(Point, 4326) | NOT NULL | PostGIS spatial point |
+| `address` | TEXT | NULLABLE | Physical address or locality |
+| `phone_number` | VARCHAR(20) | NULLABLE | Contact telephone |
+| `operating_hours` | VARCHAR(255) | NULLABLE | Operating hours |
+| `osm_node_id` | BIGINT | NULLABLE | OpenStreetMap source ID |
+| `is_24h` | BOOLEAN | NULLABLE | Confirmed 24/7 service |
+| `source` | VARCHAR(100) | NULLABLE | osm, manual, gov_portal |
+| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | Audit creation timestamp |
+| `updated_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | Audit update timestamp |
 
 **Indexes:**
-- `GIST(geometry)` — nearest safe zones
+- `GIST(geometry)` — nearest safe zones and bounding box intersections
+- `BTREE(zone_type)` — filter by facility type
+- `BTREE(verification_status)` — filter by verification confidence
+- `BTREE(zone_type, verification_status)` — compound category and verification index
 
 ### 2.9 `route_requests`
 
@@ -313,6 +317,8 @@ ORDER BY created_at DESC;
 | V10__create_feature_snapshots.sql | feature_snapshots |
 | V11__create_audit_logs.sql | audit_logs |
 | V12__insert_roles.sql | INSERT default roles |
+| V13__community_report_enhancements.sql | optional geometry and location_precision on community_reports |
+| V14__safe_zone_verification_status.sql | verification_status and indexes on safe_zones |
 
 ---
 

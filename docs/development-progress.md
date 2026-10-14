@@ -8,9 +8,9 @@
 
 ## Current Status
 
-**Overall Progress:** Milestone 17 — Spring Boot ↔ ML Integration (COMPLETE)
+**Overall Progress:** Milestone 22 — Safe Zones (COMPLETE)
 
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-14
 
 ---
 
@@ -39,7 +39,7 @@
 | 19 | Route Comparison | ✅ COMPLETE | 3-way comparison, duplicate detection, trade-off synthesis, mobile screen |
 | 20 | Safety Heatmap | ✅ COMPLETE | Viewport heatmap API, PostGIS spatial query, bounded batch ML inference, React Native overlay & legend |
 | 21 | Community Reports | ✅ COMPLETE | Citizen reporting lifecycle, optional spatial attribution, sliding-window rate limiting, mobile submit & history UI |
-| 22 | Safe Zones | ⬜ NOT STARTED | |
+| 22 | Safe Zones | ✅ COMPLETE | Safe zone data model & migration, PostGIS bbox/proximity query, public API, mobile directory & map overlay |
 | 23 | Weather Integration | ⬜ NOT STARTED | |
 | 24 | Personalization | ⬜ NOT STARTED | |
 | 25 | SOS / Emergency Features | ⬜ NOT STARTED | |
@@ -602,7 +602,67 @@ None.
   - Created `docs/community-reports.md`
   - Updated `docs/api.md`, `docs/database.md`, `docs/security.md`, and `docs/data-quality.md`
 
+---
 
+## Milestone 22 — Safe Zones
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement safe-zone entity and database migration, PostGIS bounding-box and proximity queries, public REST endpoints, mobile interactive map overlays and directory finder, with strict provenance preservation and zero data fabrication.
+
+### Completed Tasks
+
+- [x] Database schema & migration (`V14__safe_zone_verification_status.sql`):
+  - Added `verification_status VARCHAR(20) NOT NULL DEFAULT 'UNVERIFIED'` column
+  - Created indexes on `verification_status` and compound `(zone_type, verification_status)`
+- [x] Entity & DTO enhancements (`SafeZone`, `SafeZoneDto`):
+  - Added `VerificationStatus` enum (`VERIFIED`, `UNVERIFIED`, `UNAVAILABLE`)
+  - Preserved coordinates with explicit reference system (EPSG:4326 Point geometry)
+  - Added source provenance, OpenStreetMap node ID, and creation/update timestamps
+  - Added prominent academic disclaimer: facility presence does not guarantee personal safety, real-time staffing, or operational status
+  - Missing fields (address, phone, operating hours) are represented honestly as null without synthetic invention
+- [x] Repository spatial queries (`SafeZoneRepository`):
+  - Viewport bounding box query (`findInBoundingBox` and `findInBoundingBoxByTypes`) using `ST_Intersects` against `ST_MakeEnvelope`
+  - Proximity search (`findNearby` and `findNearbyByTypes`) using `ST_DWithin` on geography with distance ordering
+- [x] Safe zone service layer (`SafeZoneService`):
+  - Viewport span validation: enforces max allowed span of $0.15^\circ$ ($\approx 16.5$ km) to prevent DoS resource exhaustion
+  - Coordinate range validation: $[-90, 90]$ for latitude, $[-180, 180]$ for longitude, $min \le max$
+  - Result limit clamping: bounds nearby search to $[1, 50]$ (default 10) and bounding box to $[1, 100]$ (default 50)
+  - Proximity radius clamping: bounds search radius to $\le 10,000$ meters
+  - Pure Haversine formula calculation for exact, deterministic great-circle distances in meters
+  - Honest empty results: returns `[]` without fabricating fallback facilities
+  - ID lookup with `ResourceNotFoundException` on missing IDs
+- [x] REST controller endpoints (`SafeZoneController`):
+  - `GET /api/safe-zones`: Viewport bounding box or proximity coordinates search
+  - `GET /api/safe-zones/nearby`: Dedicated proximity search with distance calculation
+  - `GET /api/safe-zones/{id}`: Single facility retrieval
+- [x] Security & public access (`SecurityConfig`):
+  - Configured public permit for `GET /api/safe-zones` and `GET /api/safe-zones/**` without authentication barriers
+  - Privacy preservation: safe zones contain only public municipal facility information, with zero user or reporter PII
+- [x] Mobile service & client (`mobile/services/safeZones.ts`):
+  - Strong TypeScript interfaces (`SafeZone`, `SafeZoneCategory`, `VerificationStatus`)
+  - Category metadata with custom icons and color tokens (👮 Police, 🏥 Hospital, 💊 Pharmacy, 🚏 Transit, 🏢 Public Assistance)
+  - Verification metadata with status badges (`VERIFIED` green, `UNVERIFIED` amber, `UNAVAILABLE` gray)
+- [x] Mobile interactive map integration (`mobile/app/(tabs)/index.tsx`):
+  - Accessible header toggle: `🛡️ Safe Zones: ON / ⚪ Safe Zones: OFF`
+  - Category markers color-coded with distinct pins and icons
+  - Interactive selection: tapping a marker opens a bottom card with facility name, category, verification badge, address, hours, source, and disclaimer
+  - "Directions Here" action button: one-tap navigation passing coordinates directly to route planner
+  - Coexistence: Safe zone markers display concurrently alongside route polylines and safety heatmap road segments
+  - Expandable Legend: Documents safe zone categories and verification confidence levels
+- [x] Mobile directory & finder screen (`mobile/app/safe-zones.tsx`):
+  - Dedicated searchable directory with category chips, GPS location auto-fill, and radius selector
+  - Real-time distance indicators and direct route navigation buttons
+  - Honest empty state when no verified data exists in the queried area
+- [x] Route comparison integration (`mobile/app/(tabs)/routes.tsx`):
+  - Integrated `useLocalSearchParams` to autofill `endLat`, `endLon`, and `endName` when launched from safe zones
+- [x] Automated test suites:
+  - Backend unit & integration tests: **87 passed out of 87 tests** (added `SafeZoneServiceTest` [10 tests] and `SafeZoneControllerTest` [6 tests])
+  - Mobile TypeScript compilation (`npx tsc --noEmit`): **0 errors** across entire codebase
+  - Python / FastAPI ML tests: **15 passed out of 15 tests** with 100% success rate
+  - Total workspace tests: **159 passed tests**, 0 failures, 0 regressions
+- [x] Technical documentation:
+  - Created `docs/safe-zones.md`
+  - Updated `docs/api.md`, `docs/database.md`, `docs/security.md`, and `docs/data-quality.md`
 
 ---
 
@@ -623,6 +683,11 @@ None.
 | 2026-10-11 | Temporal masking (incident_datetime < query_time) | Strictly prevents future crime data from leaking into past evaluation features |
 | 2026-10-11 | Point-level KDE isolation | Guarantees coarse records are excluded from continuous point densities |
 | 2026-10-11 | Train-only fitting of MinMaxScaler | Eliminates data leakage into validation and test sets |
+| 2026-10-14 | Viewport Span Constraint (<= 0.15 deg) for Safe Zones | Prevents denial-of-service spatial query resource exhaustion across wide geographic queries |
+| 2026-10-14 | Haversine Distance Calculation for Proximity Search | Provides exact, deterministic great-circle distances in meters without Hibernate column projection conflicts |
+| 2026-10-14 | Separation of Existence vs Operational Staffing | Clarifies that verified registry existence does not guarantee real-time facility staffing or personal safety |
+| 2026-10-14 | Public Barrier-Free Access for Safe Zones | Eliminates JWT authentication requirements on GET /api/safe-zones to ensure immediate emergency access |
+| 2026-10-14 | Multi-Layer Coexistence on Interactive Map | Enables concurrent display of safe zone category pins, route polylines, and safety heatmap segments |
 | 2026-10-11 | Class imbalance weighting (balanced) | Accommodates minority high-risk road segment distribution |
 | 2026-10-11 | Explicit synthetic evaluation flagging | Prevents mock fixture test metrics from ever being misrepresented as real-world accuracy |
 | 2026-10-12 | XGBoost scale_pos_weight calculation | Balances gradient updates across minority positive crime risk instances |

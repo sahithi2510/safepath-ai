@@ -179,6 +179,20 @@ Community safety reports represent subjective, crowdsourced citizen submissions 
    - Reports submitted without coordinates are recorded as `location_precision = UNKNOWN`. The system strictly prohibits automated reverse-geocoding, IP-based approximation, or coordinate invention.
 4. **Public Query Filtering:** Public safety endpoints (`GET /api/reports/nearby`) return **only** records with `status = 'VERIFIED'`. Unverified submissions remain visible only to the original submitter and authorized moderation staff.
 
+## 11. Safe Zones Provenance & Verification Integrity
+
+Safe zones represent public assistance infrastructure (police stations, hospitals, pharmacies, transit interchanges).
+
+**Integrity Mandates:**
+1. **Zero Facility Fabrication:** Do NOT fabricate facilities, coordinates, addresses, contact details, operating hours, or verification status.
+2. **Provenance Preservation:** All facilities record source attribution (`source = 'osm'`, `source = 'gov_portal'`, etc.) and original node identifiers (`osm_node_id`).
+3. **Verification State Separation:**
+   - `VERIFIED`: Confirmed by official government registry or verified municipal audit.
+   - `UNVERIFIED`: Imported from crowdsourced open spatial data (OpenStreetMap) without individual ground audit.
+   - `UNAVAILABLE`: Facility reported inactive, closed, or status unknown.
+4. **Existence vs Operational Availability:** Physical existence in OpenStreetMap or administrative registries does not imply active staffing or guaranteed personal safety. All user interfaces and DTOs present prominent disclaimers advising users to contact 112/100/911 in active emergencies.
+5. **Honest Empty Sets:** If no trustworthy facilities exist within a requested bounding box or proximity radius, the service returns an empty list (`[]`). Facilities are never approximated or substituted with arbitrary commercial establishments.
+
 ---
 
 *SafePath AI — data-quality.md — Updated 2026-10-14*

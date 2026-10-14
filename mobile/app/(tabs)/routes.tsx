@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -74,10 +75,29 @@ const PRESET_LOCATIONS = [
 ];
 
 export default function RoutesScreen() {
+  const params = useLocalSearchParams<{
+    endLat?: string;
+    endLon?: string;
+    endName?: string;
+    startLat?: string;
+    startLon?: string;
+  }>();
+
   const [startLat, setStartLat] = useState('12.9756');
   const [startLon, setStartLon] = useState('77.6066');
   const [endLat, setEndLat] = useState('12.9716');
   const [endLon, setEndLon] = useState('77.6074');
+
+  useEffect(() => {
+    if (params.endLat && params.endLon) {
+      setEndLat(params.endLat);
+      setEndLon(params.endLon);
+    }
+    if (params.startLat && params.startLon) {
+      setStartLat(params.startLat);
+      setStartLon(params.startLon);
+    }
+  }, [params.endLat, params.endLon, params.startLat, params.startLon]);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

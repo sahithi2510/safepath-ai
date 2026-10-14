@@ -70,6 +70,11 @@ public class SafeZone {
     @Column(length = 100)
     private String source;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false, length = 20)
+    @Builder.Default
+    private VerificationStatus verificationStatus = VerificationStatus.UNVERIFIED;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -84,5 +89,11 @@ public class SafeZone {
         PHARMACY,
         PUBLIC_TRANSPORT,
         OTHER
+    }
+
+    public enum VerificationStatus {
+        VERIFIED,
+        UNVERIFIED,
+        UNAVAILABLE
     }
 }

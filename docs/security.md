@@ -69,6 +69,7 @@ allowCredentials = false
 - **Reporter Identity Isolation:** In `CommunityReportService`, public queries (`GET /api/reports/nearby`) return only verified reports and strictly omit `user_id`, email, full name, or phone numbers.
 - **Location Consent:** Incident coordinates are optional and require explicit confirmation (`locationConfirmed: true`). If withheld, the record is stored with `UNKNOWN` spatial precision.
 - **Untrusted User Content:** Report descriptions are strictly capped at 1000 characters and stripped of HTML/script elements prior to persistence.
+- **Safe Zone Facility Privacy & DoS Prevention:** Safe zone records are strictly public assistance facilities. Safe zone responses never contain user references or private personal data. Viewport spatial queries enforce coordinate bounds [-90, 90], [-180, 180] and maximum span limits (0.15 degrees) to prevent denial-of-service spatial query resource exhaustion.
 
 ---
 

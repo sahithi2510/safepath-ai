@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import {
@@ -19,6 +20,12 @@ import {
   HeatmapResponse,
   Coordinate,
 } from '../../services/heatmap';
+import {
+  SafeZone,
+  CATEGORY_CONFIG as SAFE_ZONE_CATEGORIES,
+  VERIFICATION_CONFIG as SAFE_ZONE_VERIFICATION,
+  fetchSafeZonesInViewport,
+} from '../../services/safeZones';
 
 const DEFAULT_REGION: Region = {
   latitude: 12.9756,
@@ -44,6 +51,7 @@ const SAMPLE_ROUTE_COORDS: Coordinate[] = [
 ];
 
 export default function MapScreen() {
+  const router = useRouter();
   const mapRef = useRef<MapView | null>(null);
 
   // User location and permissions
@@ -57,6 +65,13 @@ export default function MapScreen() {
   const [heatmapError, setHeatmapError] = useState<string | null>(null);
   const [heatmapData, setHeatmapData] = useState<HeatmapResponse | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<HeatmapSegment | null>(null);
+
+  // Safe Zones state
+  const [safeZonesEnabled, setSafeZonesEnabled] = useState(true);
+  const [loadingSafeZones, setLoadingSafeZones] = useState(false);
+  const [safeZonesError, setSafeZonesError] = useState<string | null>(null);
+  const [safeZones, setSafeZones] = useState<SafeZone[]>([]);
+  const [selectedSafeZone, setSelectedSafeZone] = useState<SafeZone | null>(null);
 
   // UI state
   const [showLegend, setShowLegend] = useState(false);
@@ -135,24 +150,69 @@ export default function MapScreen() {
     }
   }, []);
 
-  // Initial fetch when map is mounted and heatmap is enabled
+  // Fetch safe zones for a specific geographic bounding box
+  const loadSafeZonesForRegion = useCallback(async (region: Region) => {
+    if (region.latitudeDelta > 0.14 || region.longitudeDelta > 0.14) {
+      return;
+    }
+
+    setLoadingSafeZones(true);
+    setSafeZonesError(null);
+
+    const minLat = Math.max(-90, region.latitude - region.latitudeDelta / 2);
+    const maxLat = Math.min(90, region.latitude + region.latitudeDelta / 2);
+    const minLon = Math.max(-180, region.longitude - region.longitudeDelta / 2);
+    const maxLon = Math.min(180, region.longitude + region.longitudeDelta / 2);
+
+    try {
+      const data = await fetchSafeZonesInViewport({
+        minLat,
+        minLon,
+        maxLat,
+        maxLon,
+        limit: 50,
+      });
+      setSafeZones(data);
+    } catch (err: any) {
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        'Failed to connect to safe zones service.';
+      setSafeZonesError(message);
+    } finally {
+      setLoadingSafeZones(false);
+    }
+  }, []);
+
+  // Initial fetch when map is mounted and layers are enabled
   useEffect(() => {
     if (heatmapEnabled) {
       loadHeatmapForRegion(currentRegion);
     }
   }, [heatmapEnabled]);
 
+  useEffect(() => {
+    if (safeZonesEnabled) {
+      loadSafeZonesForRegion(currentRegion);
+    }
+  }, [safeZonesEnabled]);
+
   // Handle region change with debounce
   const handleRegionChangeComplete = (region: Region) => {
     setCurrentRegion(region);
-    if (!heatmapEnabled) return;
 
     if (fetchTimeoutRef.current) {
       clearTimeout(fetchTimeoutRef.current);
     }
 
     fetchTimeoutRef.current = setTimeout(() => {
-      loadHeatmapForRegion(region);
+      if (heatmapEnabled) {
+        loadHeatmapForRegion(region);
+      }
+      if (safeZonesEnabled) {
+        loadSafeZonesForRegion(region);
+      }
     }, 600);
   };
 
@@ -161,6 +221,9 @@ export default function MapScreen() {
     mapRef.current?.animateToRegion(BANGALORE_CENTER, 800);
     if (heatmapEnabled) {
       loadHeatmapForRegion(BANGALORE_CENTER);
+    }
+    if (safeZonesEnabled) {
+      loadSafeZonesForRegion(BANGALORE_CENTER);
     }
   };
 
@@ -206,6 +269,28 @@ export default function MapScreen() {
             );
           })}
 
+        {/* Safe Zone Facility Markers */}
+        {safeZonesEnabled &&
+          safeZones.map((zone) => {
+            const cat = SAFE_ZONE_CATEGORIES[zone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER;
+            return (
+              <Marker
+                key={`safezone-${zone.id}`}
+                coordinate={{
+                  latitude: zone.latitude,
+                  longitude: zone.longitude,
+                }}
+                title={`${cat.icon} ${zone.name}`}
+                description={`${cat.label} • ${zone.verificationStatus}`}
+                pinColor={cat.pinColor}
+                onPress={() => {
+                  setSelectedSegment(null);
+                  setSelectedSafeZone(zone);
+                }}
+              />
+            );
+          })}
+
         {/* Coexisting Route Polyline (Demonstration of route-heatmap coexistence) */}
         {showSampleRoute && (
           <>
@@ -238,6 +323,14 @@ export default function MapScreen() {
                 <Text style={styles.demoBadgeText}>DEMO ML MODEL</Text>
               </View>
             )}
+            <TouchableOpacity
+              style={styles.directoryHeaderBadge}
+              onPress={() => router.push('/safe-zones')}
+              accessibilityRole="button"
+              accessibilityLabel="Open Safe Zones Directory"
+            >
+              <Text style={styles.directoryHeaderBadgeText}>🔍 Safe Zones</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -270,13 +363,39 @@ export default function MapScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[
+              styles.controlBtn,
+              safeZonesEnabled ? styles.safeZonesBtnActive : styles.controlBtnInactive,
+            ]}
+            onPress={() => {
+              const nextState = !safeZonesEnabled;
+              setSafeZonesEnabled(nextState);
+              if (nextState) {
+                loadSafeZonesForRegion(currentRegion);
+              }
+            }}
+            accessibilityRole="switch"
+            accessibilityLabel="Toggle safe zones layer"
+            accessibilityState={{ checked: safeZonesEnabled }}
+          >
+            <Text
+              style={[
+                styles.controlBtnText,
+                safeZonesEnabled ? styles.safeZonesBtnTextActive : styles.controlBtnTextInactive,
+              ]}
+            >
+              {safeZonesEnabled ? '🛡️ Safe Zones: ON' : '⚪ Safe Zones: OFF'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.legendToggleBtn}
             onPress={() => setShowLegend(!showLegend)}
             accessibilityRole="button"
             accessibilityLabel="Toggle safety heatmap legend and disclaimers"
           >
             <Text style={styles.legendToggleBtnText}>
-              {showLegend ? 'Hide Legend' : '📖 Legend'}
+              {showLegend ? 'Hide' : '📖 Legend'}
             </Text>
           </TouchableOpacity>
 
@@ -290,7 +409,7 @@ export default function MapScreen() {
             accessibilityLabel="Toggle route coexistence demo"
           >
             <Text style={styles.routeToggleBtnText}>
-              {showSampleRoute ? 'Hide Route' : '🧭 Route Test'}
+              {showSampleRoute ? 'Hide' : '🧭 Route'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -428,6 +547,50 @@ export default function MapScreen() {
               </View>
             </View>
 
+            {/* Safe Zone Facility Legend */}
+            <View style={styles.legendSectionDivider} />
+            <Text style={styles.legendSectionHeader}>🛡️ Verified Safe Zones</Text>
+
+            <View style={styles.legendItem}>
+              <Text style={styles.legendIconBadge}>👮</Text>
+              <View style={styles.legendTextCol}>
+                <Text style={styles.legendCategoryTitle}>Police Station</Text>
+                <Text style={styles.legendCategoryDesc}>Blue marker • Law enforcement facility</Text>
+              </View>
+            </View>
+
+            <View style={styles.legendItem}>
+              <Text style={styles.legendIconBadge}>🏥</Text>
+              <View style={styles.legendTextCol}>
+                <Text style={styles.legendCategoryTitle}>Hospital / Clinic</Text>
+                <Text style={styles.legendCategoryDesc}>Red marker • Emergency medical facility</Text>
+              </View>
+            </View>
+
+            <View style={styles.legendItem}>
+              <Text style={styles.legendIconBadge}>💊</Text>
+              <View style={styles.legendTextCol}>
+                <Text style={styles.legendCategoryTitle}>Pharmacy</Text>
+                <Text style={styles.legendCategoryDesc}>Green marker • Medication & first aid</Text>
+              </View>
+            </View>
+
+            <View style={styles.legendItem}>
+              <Text style={styles.legendIconBadge}>🚏</Text>
+              <View style={styles.legendTextCol}>
+                <Text style={styles.legendCategoryTitle}>Transit Hub</Text>
+                <Text style={styles.legendCategoryDesc}>Purple marker • Staffed transit node</Text>
+              </View>
+            </View>
+
+            <View style={styles.legendItem}>
+              <Text style={styles.legendIconBadge}>🏢</Text>
+              <View style={styles.legendTextCol}>
+                <Text style={styles.legendCategoryTitle}>Public Assistance</Text>
+                <Text style={styles.legendCategoryDesc}>Amber marker • Community help desk</Text>
+              </View>
+            </View>
+
             {/* Scientific Transparency Disclaimers */}
             <View style={styles.disclaimerContainer}>
               <Text style={styles.disclaimerHeading}>Academic & Data Integrity Notice</Text>
@@ -526,6 +689,127 @@ export default function MapScreen() {
             <Text style={styles.segmentDisclaimerText}>
               ⚠️ Demo Estimate: Not calibrated crime probability. Missing data is never defaulted safe.
             </Text>
+          </View>
+        </Card>
+      )}
+
+      {/* Selected Safe Zone Detail Card */}
+      {selectedSafeZone && (
+        <Card style={styles.safeZoneDetailCard}>
+          <View style={styles.safeZoneCardHeader}>
+            <View style={styles.safeZoneTitleCol}>
+              <Text style={styles.safeZoneName} numberOfLines={1}>
+                {selectedSafeZone.name}
+              </Text>
+              <View style={styles.safeZoneBadgesRow}>
+                <View
+                  style={[
+                    styles.safeZoneBadge,
+                    {
+                      backgroundColor:
+                        (SAFE_ZONE_CATEGORIES[selectedSafeZone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER).bgHex,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.safeZoneBadgeText,
+                      {
+                        color:
+                          (SAFE_ZONE_CATEGORIES[selectedSafeZone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER).pinColor,
+                      },
+                    ]}
+                  >
+                    {(SAFE_ZONE_CATEGORIES[selectedSafeZone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER).icon}{' '}
+                    {(SAFE_ZONE_CATEGORIES[selectedSafeZone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER).label}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.safeZoneBadge,
+                    {
+                      backgroundColor:
+                        (SAFE_ZONE_VERIFICATION[selectedSafeZone.verificationStatus] || SAFE_ZONE_VERIFICATION.UNVERIFIED).bgHex,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.safeZoneBadgeText,
+                      {
+                        color:
+                          (SAFE_ZONE_VERIFICATION[selectedSafeZone.verificationStatus] || SAFE_ZONE_VERIFICATION.UNVERIFIED).badgeColor,
+                      },
+                    ]}
+                  >
+                    {(SAFE_ZONE_VERIFICATION[selectedSafeZone.verificationStatus] || SAFE_ZONE_VERIFICATION.UNVERIFIED).label}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={() => setSelectedSafeZone(null)}
+              accessibilityLabel="Dismiss safe zone details"
+            >
+              <Text style={styles.closeBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Safe Zone Details */}
+          <View style={styles.safeZoneInfoRow}>
+            <Text style={styles.safeZoneInfoLabel}>Address:</Text>
+            <Text style={styles.safeZoneInfoValue}>
+              {selectedSafeZone.address || 'Address not documented'}
+            </Text>
+          </View>
+
+          <View style={styles.safeZoneInfoRow}>
+            <Text style={styles.safeZoneInfoLabel}>Operating Hours:</Text>
+            <Text style={styles.safeZoneInfoValue}>
+              {selectedSafeZone.operatingHours || (selectedSafeZone.is24h ? 'Open 24/7' : 'Hours not documented')}
+            </Text>
+          </View>
+
+          <View style={styles.safeZoneInfoRow}>
+            <Text style={styles.safeZoneInfoLabel}>Source:</Text>
+            <Text style={styles.safeZoneInfoSubtle}>
+              {selectedSafeZone.source || 'OpenStreetMap'}
+              {selectedSafeZone.osmNodeId ? ` (#${selectedSafeZone.osmNodeId})` : ''}
+            </Text>
+          </View>
+
+          {/* Academic & Safety Disclaimer */}
+          <View style={styles.safeZoneDisclaimerBox}>
+            <Text style={styles.safeZoneDisclaimerText}>
+              ⚠️ Existence in public spatial records does NOT guarantee personal safety, active staffing, or current operational status.
+            </Text>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.safeZoneActionRow}>
+            <TouchableOpacity
+              style={styles.navigateActionBtn}
+              onPress={() => {
+                router.push({
+                  pathname: '/(tabs)/routes',
+                  params: {
+                    endLat: selectedSafeZone.latitude.toString(),
+                    endLon: selectedSafeZone.longitude.toString(),
+                    endName: selectedSafeZone.name,
+                  },
+                });
+              }}
+            >
+              <Text style={styles.navigateActionBtnText}>🧭 Directions Here</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.directoryLinkBtn}
+              onPress={() => router.push('/safe-zones')}
+            >
+              <Text style={styles.directoryLinkBtnText}>Directory</Text>
+            </TouchableOpacity>
           </View>
         </Card>
       )}
@@ -908,5 +1192,151 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#8D6E63',
     lineHeight: 13,
+  },
+  safeZonesBtnActive: {
+    backgroundColor: '#1E3A8A',
+  },
+  safeZonesBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  directoryHeaderBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  directoryHeaderBadgeText: {
+    color: '#1D4ED8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  legendSectionDivider: {
+    height: 1,
+    backgroundColor: '#E5E5EA',
+    marginVertical: 10,
+  },
+  legendSectionHeader: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 8,
+  },
+  legendIconBadge: {
+    fontSize: 18,
+    marginRight: 10,
+    width: 24,
+    textAlign: 'center',
+  },
+  safeZoneDetailCard: {
+    position: 'absolute',
+    bottom: 20,
+    left: 12,
+    right: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  safeZoneCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  safeZoneTitleCol: {
+    flex: 1,
+    marginRight: 8,
+  },
+  safeZoneName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  safeZoneBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  safeZoneBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+  },
+  safeZoneBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  safeZoneInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  safeZoneInfoLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    width: 110,
+    fontWeight: '500',
+  },
+  safeZoneInfoValue: {
+    flex: 1,
+    fontSize: 12,
+    color: '#1F2937',
+  },
+  safeZoneInfoSubtle: {
+    flex: 1,
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  safeZoneDisclaimerBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 6,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  safeZoneDisclaimerText: {
+    fontSize: 10,
+    color: '#92400E',
+    lineHeight: 14,
+  },
+  safeZoneActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  navigateActionBtn: {
+    flex: 2,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  navigateActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  directoryLinkBtn: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  directoryLinkBtnText: {
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

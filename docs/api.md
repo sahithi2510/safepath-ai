@@ -432,30 +432,77 @@ Verify or reject a report. Reports already in terminal states cannot be re-verif
 
 ## 5. Safe Zones
 
+Safe zones provide verified public assistance facilities (police stations, hospitals, pharmacies, transit hubs). All endpoints are publicly accessible without authentication.
+
+### GET /api/safe-zones
+
+Query safe zones within a geographic bounding box (viewport) or around a coordinate center point.
+
+**Query Parameters (Viewport Mode):**
+- `minLat` (double, -90.0 to 90.0): Southern boundary
+- `minLon` (double, -180.0 to 180.0): Western boundary
+- `maxLat` (double, -90.0 to 90.0): Northern boundary
+- `maxLon` (double, -180.0 to 180.0): Eastern boundary
+- `types` (string list, optional): Filter by `POLICE_STATION`, `HOSPITAL`, `PHARMACY`, `PUBLIC_TRANSPORT`, `OTHER`
+- `limit` (int, default 50, max 100): Maximum results to return
+
+*Validation Limit:* Viewport span `(maxLat - minLat)` and `(maxLon - minLon)` must not exceed 0.15 degrees (~16 km).
+
+**Query Parameters (Proximity Mode):**
+- `lat` (double, -90.0 to 90.0): Center latitude
+- `lon` (double, -180.0 to 180.0): Center longitude
+- `radiusMeters` (double, default 1000, max 10000): Proximity radius
+- `types` (string list, optional): Category filter
+- `limit` (int, default 10, max 50): Result limit
+
+**Response 200 (Array of SafeZoneDto):**
+```json
+[
+  {
+    "id": "c1f7a8b2-4d3e-4f5a-9b1c-2d3e4f5a6b7c",
+    "name": "Cubbon Park Police Station",
+    "zoneType": "POLICE_STATION",
+    "verificationStatus": "VERIFIED",
+    "latitude": 12.9762,
+    "longitude": 77.5929,
+    "address": "Kasturba Road, Cubbon Park, Bengaluru",
+    "phoneNumber": "+91-80-2294-2565",
+    "operatingHours": "24/7",
+    "is24h": true,
+    "source": "osm",
+    "osmNodeId": 32819042,
+    "distanceMeters": 340.5,
+    "createdAt": "2026-10-14T08:00:00Z",
+    "updatedAt": "2026-10-14T08:00:00Z",
+    "disclaimer": "Listing of a facility does not guarantee personal safety, real-time staffing, or current operational status. Always contact emergency services (112 / 100 / 911) in life-threatening situations."
+  }
+]
+```
+
 ### GET /api/safe-zones/nearby
 
-Get nearby safe zones.
+Get safe zones ordered by proximity distance from center point.
 
-**Query params:** `lat=12.97&lon=77.59&radiusMeters=1000&types=POLICE_STATION,HOSPITAL&limit=10`
+**Query Parameters:**
+- `lat` (double, required): -90.0 to 90.0
+- `lon` (double, required): -180.0 to 180.0
+- `radiusMeters` (double, default 1000, max 10000)
+- `types` (string list, optional): Category filter
+- `limit` (int, default 10, max 50)
 
-**Response 200:**
-```json
-{
-  "safeZones": [
-    {
-      "id": "uuid",
-      "name": "Cubbon Park Police Station",
-      "zoneType": "POLICE_STATION",
-      "latitude": 12.9762,
-      "longitude": 77.5929,
-      "distanceMeters": 250.3,
-      "address": "Cubbon Park, Bengaluru",
-      "phoneNumber": "100",
-      "is24h": true
-    }
-  ]
-}
-```
+**Response 200:** Array of `SafeZoneDto` sorted by `distanceMeters` ascending.
+
+### GET /api/safe-zones/{id}
+
+Get detailed metadata for a specific safe zone facility.
+
+**Path Parameter:** `id` (UUID)
+
+**Response 200:** Single `SafeZoneDto` object.
+
+**Errors:**
+- `400 Bad Request` — Invalid coordinates, span exceeded, or missing parameters
+- `404 Not Found` — Safe zone record not found
 
 ---
 
