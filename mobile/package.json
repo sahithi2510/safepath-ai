@@ -27,8 +27,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "prebuild": "expo prebuild",
-    "build:android:dev": "eas build -p android --profile development",
-    "build:android:apk": "eas build -p android --profile preview"
+    "build:android:dev": "npx -y eas-cli build -p android --profile development",
+    "build:android:apk": "npx -y eas-cli build -p android --profile preview"
   },
   "private": true
 }
