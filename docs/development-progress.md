@@ -782,10 +782,54 @@ None.
 
 ---
 
+## Milestone 26 — Deployment Blocker Resolution and Reproducible Demo
+
+**Status:** ✅ COMPLETE  
+**Goal:** Resolve or clearly document M25 deployment blockers; establish the strongest reproducible demonstration possible on the available machine without claiming infrastructure or mobile tests not actually performed; reconcile test counts from real reports.
+
+### Completed Tasks
+
+- [x] Test suite audit & reconciled count derivation:
+  - Audited historical claim of "197 tests" across repository test files and reports
+  - Identified real counts:
+    - Backend tests (Maven Surefire): **128 tests** across 21 test classes (added 3 live integration tests)
+    - Python offline tests (`scripts/tests`): **47 tests** across 11 test files
+    - FastAPI ML service tests (`ml-service/tests`): **16 tests**
+    - Mobile TypeScript check (`tsc.cmd --noEmit`): **0 errors** (no unit tests configured in mobile package.json)
+    - Total verified automated tests: **191 tests**, 100% pass rate (0 failures, 0 errors, 0 skipped)
+- [x] Docker Desktop diagnostic audit:
+  - Checked CLI (29.7.2, build a7dcaa6), active context (`desktop-linux`), and WSL status (`Ubuntu`: Stopped, `docker-desktop`: Stopped)
+  - Isolated exact blocker: named pipe `\\.\pipe\dockerDesktopLinuxEngine` inaccessible in headless CLI execution without interactive user desktop activation
+  - Documented Docker Compose orchestration as **BLOCKED** without modifying Windows/WSL settings or elevating privileges
+- [x] Live PostgreSQL / PostGIS status:
+  - Port 5432 closed; no standalone PostgreSQL instance on host
+  - Honestly documented live database validation as **BLOCKED / NOT RUN**
+- [x] Standalone live service validation:
+  - Launched FastAPI ML service daemon on `http://127.0.0.1:8001`
+  - Verified live `GET /health` (`status: UP`, `active_model: xgboost`, `is_synthetic_demonstration: true`)
+  - Verified live `POST /predict-risk` (`risk_score: 0.007`, `safety_score: 0.993`, `risk_level: VERY_LOW`)
+  - Verified live `POST /explain` (`reconstruction_valid: true`, `reconstruction_error: 0.0`)
+  - Verified live `POST /predict-risk/batch` (2 segments scored, feature completeness 0.20)
+- [x] Spring Boot to FastAPI live HTTP connectivity:
+  - Resolved Java 21 / Spring 6.1 `RestClient` HTTP/2 cleartext upgrade (`Upgrade: h2c`) rejection by Uvicorn by configuring `SimpleClientHttpRequestFactory`
+  - Enriched `MlServiceClientImpl.java` error logging with `e.getResponseBodyAsString()` on 400/422
+  - Created [LiveMlServiceConnectivityTest.java](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/integration/LiveMlServiceConnectivityTest.java) verifying live health, single prediction, and batch prediction
+- [x] Mobile demonstration readiness:
+  - Verified Expo environment and public API base URL configuration
+  - Executed TypeScript static type check (`tsc --noEmit`): 0 errors
+  - Documented manual mobile demonstration steps and labeled runtime UI rendering as **NOT VERIFIED** (no Android emulator/device connected)
+- [x] Technical documentation:
+  - Created `docs/m26-deployment-demo.md` with complete prerequisites, diagnostic logs, verified vs blocked matrix, live test results, manual demo guide, safe cleanup steps, and limitations.
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-15 | SimpleClientHttpRequestFactory for Uvicorn HTTP/1.1 | Prevents Java 21 / Spring 6.1 RestClient from sending HTTP/2 cleartext upgrades (h2c) that cause Uvicorn 422 Unprocessable Entity body rejections |
+| 2026-10-15 | RestClient Validation Response Body Propagation | Logs and exposes e.getResponseBodyAsString() upon HTTP 400 and 422 errors to ensure upstream schema validation failures are never obscured |
+| 2026-10-15 | Empirical Automated Test Accounting Protocol | Derives test counts strictly from Surefire and Pytest XML/execution reports (128 Java + 63 Python = 191 total), rejecting arbitrary arithmetic totals |
 | 2026-10-14 | Resilient Container Healthchecks with Curl/Wget Fallbacks | Enriches Alpine and Debian slim base images with curl while maintaining wget/python fallbacks to eliminate healthcheck false negatives |
 | 2026-10-14 | Dynamic Model Directory Auto-Resolution | Dynamically checks ./models and ../models to make ML execution frictionless whether run from workspace root, ml-service subfolder, or Docker container |
 | 2026-10-14 | Mobile Dual-Variable Base URL Strategy | Checking both EXPO_PUBLIC_API_URL and EXPO_PUBLIC_API_BASE_URL prevents configuration drift between .env templates and Expo client services |

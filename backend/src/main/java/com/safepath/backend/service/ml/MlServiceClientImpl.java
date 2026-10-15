@@ -203,8 +203,8 @@ public class MlServiceClientImpl implements MlServiceClient {
             log.warn("ML service is running but models are unready (503 Service Unavailable)");
             throw new MlServiceUnavailableException("ML models are unready or not loaded on server.", e);
         } else if (status == HttpStatus.BAD_REQUEST.value() || status == HttpStatus.UNPROCESSABLE_ENTITY.value()) {
-            log.warn("ML service rejected request with status {}: {}", status, e.getStatusText());
-            throw new MlServiceValidationException("ML request rejected: " + e.getStatusText());
+            log.warn("ML service rejected request with status {}: {} - Body: {}", status, e.getStatusText(), e.getResponseBodyAsString());
+            throw new MlServiceValidationException("ML request rejected: " + e.getStatusText() + " - " + e.getResponseBodyAsString());
         } else if (status == HttpStatus.NOT_IMPLEMENTED.value()) {
             log.warn("ML explainer is not supported for current model (501 Not Implemented)");
             throw new MlServiceException("SHAP explainer is not available for active model.", HttpStatus.NOT_IMPLEMENTED);
