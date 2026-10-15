@@ -46,8 +46,8 @@
 | 26 | Testing | ✅ COMPLETE | Full suite verified (160 Java, 63 Python, TS check) |
 | 27 | Security Review | ⬜ NOT STARTED | |
 | 28 | Documentation | ⬜ NOT STARTED | |
-| 29 | Android Development Build | ⬜ NOT STARTED | |
-| 30 | Android APK Build | ⬜ NOT STARTED | |
+| 29 | Android Development Build | 🔴 BLOCKED | Configured (app.json/eas.json); compilation blocked by missing Android SDK on host |
+| 30 | Android APK Build | 🔴 BLOCKED | Configured (EAS preview profile); artifact generation blocked by Android SDK / EAS login |
 
 Legend: ✅ COMPLETE | 🔄 IN PROGRESS | 🔴 BLOCKED | ⬜ NOT STARTED
 
@@ -988,6 +988,8 @@ None.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-15 | EAS Configuration Specification for Android Builds | Defining internal APK preview and developmentClient build profiles in eas.json enables deterministic artifact generation without local Android SDK compilation dependencies |
+| 2026-10-15 | Explicit Android Package and Location Permissions | Setting package com.safepath.mobile and fine/coarse location permissions in app.json prepares native Android manifests for standalone packaging |
 | 2026-10-15 | Automated Controller Test Suite Isolation | Mocking service dependencies in unit controller tests ensures API contracts and status codes are validated independently of database state |
 | 2026-10-15 | Dynamic Live-Service Connectivity Skips | Using JUnit `@EnabledIf` for live ML service connectivity tests guarantees clean offline CI builds while executing fully when live containers are present |
 | 2026-10-15 | Comprehensive Test Accounting Protocol | Formally documenting actual execution counts (160 Java [157 passed, 3 skipped] + 63 Python = 223 automated tests) upholds strict scientific transparency |

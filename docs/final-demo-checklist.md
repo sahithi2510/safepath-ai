@@ -449,10 +449,15 @@ Status designations:
 | **Backend Service** | Ambient Weather Client & Cache | [`WeatherServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/WeatherServiceTest.java) | **PASS** (Quantized cache & DB fallback verified) |
 | **Backend Service** | Safe Zones Haversine Search | [`SafeZoneServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/SafeZoneServiceTest.java) | **PASS** (10/10 tests passed; barrier-free access verified) |
 | **Backend Service** | Community Report Rate Limiting & RBAC | [`CommunityReportServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/CommunityReportServiceTest.java) | **PASS** (Max 5/10min, moderator verification, PII scrubbed) |
-| **Backend Total** | Maven Surefire Test Suite | `backend/target/surefire-reports` | **PASS** (128 tests run, 0 failures, 0 errors, 0 skipped) |
+| **Backend Service** | Personalization & Profile Updating | [`UserServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/UserServiceTest.java) | **PASS** (8/8 tests passed across service & controller) |
+| **Backend Service** | Emergency Contacts & SOS Audit Logs | [`EmergencyContactServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/EmergencyContactServiceTest.java) | **PASS** (15/15 tests passed; primary contact invariant & audit logging) |
+| **Backend Service** | Authentication & JWT Authorization | [`AuthServiceTest.java`](file:///c:/Users/91967/OneDrive/Desktop/Safe%20path%20AI/backend/src/test/java/com/safepath/backend/service/AuthServiceTest.java) | **PASS** (7/7 tests passed; duplicate 409, bad creds 401, JWT issuance) |
+| **Backend Total** | Maven Surefire Test Suite | `backend/target/surefire-reports` | **PASS** (160 tests run: 157 passed, 3 skipped, 0 failures) |
 | **Python Offline** | Ingestion, KDE, Leakage, Model Training | Pytest on `scripts/tests` | **PASS** (47 tests passed, 0 failures) |
 | **Python ML Total** | Pytest Test Suites Combined | `pytest ml-service/tests scripts/tests` | **PASS** (63 tests passed, 0 failures) |
 | **Mobile Client** | TypeScript Static Type Compilation | `.\node_modules\.bin\tsc.cmd --noEmit` | **PASS** (0 errors across entire mobile codebase) |
+| **Mobile Client** | Android Build Preparation | `mobile/app.json`, `mobile/eas.json` | **PASS** (Package `com.safepath.mobile`, EAS profiles configured) |
+| **Mobile Client** | Android Release APK Generation | Local Gradle / EAS Cloud Build | **BLOCKED** (Android SDK not installed; EAS requires interactive login) |
 | **Mobile Client** | Android Emulator / Physical Device UI | Hardware / ADB verification | **NOT VERIFIED** (No emulator or phone connected) |
 
 ---
