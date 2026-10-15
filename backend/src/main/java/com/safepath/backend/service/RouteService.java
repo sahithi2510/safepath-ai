@@ -255,12 +255,32 @@ public class RouteService {
         Point endPoint = geometryFactory.createPoint(new Coordinate(endLon, endLat));
         endPoint.setSRID(4326);
 
+        // Parse requested preference or resolve from user profile
+        RoutePreference personalizedPreference = RoutePreference.BALANCED;
+        RoutePreference recordedPref = RoutePreference.STANDARD;
+        if (request.getRoutePreference() != null && !request.getRoutePreference().isBlank()) {
+            try {
+                RoutePreference parsed = RoutePreference.valueOf(request.getRoutePreference().trim().toUpperCase());
+                recordedPref = parsed;
+                if (parsed == RoutePreference.SOLO_TRAVELLER || parsed == RoutePreference.TOURIST || parsed == RoutePreference.ELDERLY) {
+                    personalizedPreference = parsed;
+                }
+            } catch (IllegalArgumentException e) {
+                log.warn("Invalid routePreference '{}', defaulting to BALANCED", request.getRoutePreference());
+            }
+        } else if (user != null && user.getRoutePreference() != null) {
+            recordedPref = user.getRoutePreference();
+            if (recordedPref == RoutePreference.SOLO_TRAVELLER || recordedPref == RoutePreference.TOURIST || recordedPref == RoutePreference.ELDERLY) {
+                personalizedPreference = recordedPref;
+            }
+        }
+
         if (user != null) {
             RouteRequest routeReq = new RouteRequest();
             routeReq.setUser(user);
             routeReq.setStartPoint(startPoint);
             routeReq.setEndPoint(endPoint);
-            routeReq.setPreference(RoutePreference.STANDARD);
+            routeReq.setPreference(recordedPref);
             routeRequestRepository.save(routeReq);
         }
 
@@ -339,11 +359,11 @@ public class RouteService {
                 graph,
                 riskScores);
 
-        // 5. Calculate BALANCED route
+        // 5. Calculate BALANCED or PERSONALIZED route
         List<RoadSegment> balancedSegments = aStarRoutingEngine.findRoute(
                 closestToStart.getStartNodeId(),
                 closestToEnd.getEndNodeId(),
-                RoutePreference.BALANCED,
+                personalizedPreference,
                 graph,
                 riskScores);
 
@@ -367,7 +387,7 @@ public class RouteService {
                 "FASTEST", fastestSegments, predictionsMap, mlServiceAvailable, isSyntheticDemonstration, modelVersion);
 
         RouteDto.RouteResult balancedResult = buildRouteResult(
-                "BALANCED", balancedSegments, predictionsMap, mlServiceAvailable, isSyntheticDemonstration, modelVersion);
+                "BALANCED", balancedSegments, predictionsMap, mlServiceAvailable, isSyntheticDemonstration, modelVersion, personalizedPreference);
 
         RouteDto.RouteResult safestResult;
         if (mlServiceAvailable && safestSegments != null) {
@@ -473,6 +493,17 @@ public class RouteService {
             boolean isMlScored, 
             Boolean isSyntheticDemonstration, 
             String modelVersion) {
+        return buildRouteResult(mode, segments, predictionsMap, isMlScored, isSyntheticDemonstration, modelVersion, RoutePreference.BALANCED);
+    }
+
+    private RouteDto.RouteResult buildRouteResult(
+            String mode, 
+            List<RoadSegment> segments, 
+            Map<String, PredictRiskResponseDto> predictionsMap, 
+            boolean isMlScored, 
+            Boolean isSyntheticDemonstration, 
+            String modelVersion,
+            RoutePreference preference) {
 
         List<RouteDto.CoordinateDto> coordList = new ArrayList<>();
         List<List<Double>> geoJsonCoords = new ArrayList<>();
@@ -538,7 +569,15 @@ public class RouteService {
             importantFactors.add("Heavily prioritizes lower predicted relative risk");
             importantFactors.add(String.format("%.0f%% of route is along verified lit segments", litPercentage));
         } else {
-            importantFactors.add("Balances transit duration and relative risk");
+            if (preference == RoutePreference.SOLO_TRAVELLER) {
+                importantFactors.add("Personalized for Solo Traveller: elevated safety weighting on lit corridors");
+            } else if (preference == RoutePreference.TOURIST) {
+                importantFactors.add("Personalized for Tourist: balanced pace along major thoroughfares");
+            } else if (preference == RoutePreference.ELDERLY) {
+                importantFactors.add("Personalized for Accessibility: prioritized gentler pace and shorter distances");
+            } else {
+                importantFactors.add("Balances transit duration and relative risk");
+            }
             importantFactors.add(String.format("%.0f%% of route is along verified lit segments", litPercentage));
         }
 

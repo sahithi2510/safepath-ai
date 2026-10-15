@@ -456,4 +456,48 @@ class RouteComparisonServiceTest {
         assertThat(response.getFastestRoute()).isNotNull();
         assertThat(response.getSafestRoute()).isNotNull();
     }
+
+    @Test
+    @DisplayName("searchRoutes with SOLO_TRAVELLER preference invokes A* with SOLO_TRAVELLER weights and adds personalized factor")
+    void testSearchRoutes_WithPersonalizedPreference_SoloTraveller() {
+        RouteDto.SearchRequest request = RouteDto.SearchRequest.builder()
+                .startLat(12.9716).startLon(77.5946)
+                .endLat(12.9750).endLon(77.5990)
+                .routePreference("SOLO_TRAVELLER")
+                .build();
+
+        List<RoadSegment> localNetwork = List.of(directFastSegment, detourSafeSegment);
+        when(roadSegmentRepository.findWalkableSegmentsWithinRadius(any(), anyDouble())).thenReturn(localNetwork);
+        when(roadSegmentRepository.findNearestSegment(startPoint)).thenReturn(directFastSegment);
+        when(roadSegmentRepository.findNearestSegment(endPoint)).thenReturn(detourSafeSegment);
+
+        String directKey = directFastSegment.getId().toString();
+        String detourKey = detourSafeSegment.getId().toString();
+        when(roadSegmentFeatureService.resolveSegmentId(directFastSegment)).thenReturn(directKey);
+        when(roadSegmentFeatureService.resolveSegmentId(detourSafeSegment)).thenReturn(detourKey);
+
+        when(roadSegmentFeatureService.prepareBatchRequests(anyList(), any(), any(), any())).thenReturn(List.of(
+                PredictRiskRequestDto.builder().segmentId(directKey).build(),
+                PredictRiskRequestDto.builder().segmentId(detourKey).build()
+        ));
+
+        when(mlServiceClient.predictRiskBatch(anyList())).thenReturn(Map.of(
+                directKey, PredictRiskResponseDto.builder().segmentId(directKey).riskScore(0.70).safetyScore(0.30).build(),
+                detourKey, PredictRiskResponseDto.builder().segmentId(detourKey).riskScore(0.10).safetyScore(0.90).build()
+        ));
+
+        when(aStarRoutingEngine.findRoute(anyLong(), anyLong(), eq(RoutePreference.FASTEST), anyMap(), anyMap()))
+                .thenReturn(List.of(directFastSegment));
+        when(aStarRoutingEngine.findRoute(anyLong(), anyLong(), eq(RoutePreference.SOLO_TRAVELLER), anyMap(), anyMap()))
+                .thenReturn(List.of(detourSafeSegment));
+        when(aStarRoutingEngine.findRoute(anyLong(), anyLong(), eq(RoutePreference.SAFEST), anyMap(), anyMap()))
+                .thenReturn(List.of(detourSafeSegment));
+
+        RouteDto.SearchResponse response = routeService.searchRoutes("solo@example.com", request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getBalancedRoute()).isNotNull();
+        assertThat(response.getBalancedRoute().getImportantFactors())
+                .anyMatch(factor -> factor.contains("Personalized for Solo Traveller"));
+    }
 }

@@ -32,6 +32,36 @@ class RoutingPropertiesTest {
         assertThat(safest.getAlpha()).isEqualTo(0.1);
         assertThat(safest.getBeta()).isEqualTo(0.1);
         assertThat(safest.getGamma()).isEqualTo(0.8);
+
+        // SOLO_TRAVELLER mode increases safety weight on lit streets
+        RoutingProperties.RouteWeights solo = properties.getWeightsForPreference(RoutePreference.SOLO_TRAVELLER);
+        assertThat(solo.getAlpha()).isEqualTo(0.15);
+        assertThat(solo.getBeta()).isEqualTo(0.15);
+        assertThat(solo.getGamma()).isEqualTo(0.7);
+
+        // TOURIST mode prefers major thoroughfares
+        RoutingProperties.RouteWeights tourist = properties.getWeightsForPreference(RoutePreference.TOURIST);
+        assertThat(tourist.getAlpha()).isEqualTo(0.3);
+        assertThat(tourist.getBeta()).isEqualTo(0.3);
+        assertThat(tourist.getGamma()).isEqualTo(0.4);
+
+        // ELDERLY mode prioritizes gentler terrain and shorter walking distances
+        RoutingProperties.RouteWeights elderly = properties.getWeightsForPreference(RoutePreference.ELDERLY);
+        assertThat(elderly.getAlpha()).isEqualTo(0.1);
+        assertThat(elderly.getBeta()).isEqualTo(0.4);
+        assertThat(elderly.getGamma()).isEqualTo(0.5);
+
+        // STANDARD mode matches BALANCED weights
+        RoutingProperties.RouteWeights standard = properties.getWeightsForPreference(RoutePreference.STANDARD);
+        assertThat(standard.getAlpha()).isEqualTo(0.3);
+        assertThat(standard.getBeta()).isEqualTo(0.2);
+        assertThat(standard.getGamma()).isEqualTo(0.5);
+
+        // Null preference defaults to balanced weights
+        RoutingProperties.RouteWeights nullPref = properties.getWeightsForPreference(null);
+        assertThat(nullPref.getAlpha()).isEqualTo(0.3);
+        assertThat(nullPref.getBeta()).isEqualTo(0.2);
+        assertThat(nullPref.getGamma()).isEqualTo(0.5);
     }
 
     @Test

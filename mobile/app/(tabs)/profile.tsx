@@ -1,45 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
-import { AuthService } from '../../services/auth';
+import { UserService, UserProfile } from '../../services/user';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [profileData, setProfileData] = useState<any>(null);
+  const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const data = await AuthService.me();
-        setProfileData(data);
-      } catch (error) {
-        console.error('Failed to fetch profile', error);
-        Alert.alert('Error', 'Could not load profile data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchProfile = async () => {
+    try {
+      const data = await UserService.getProfile();
+      setProfileData(data);
+    } catch (error) {
+      console.error('Failed to fetch profile', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [])
+  );
 
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
   };
 
-  if (loading) {
+  if (loading && !profileData && !user) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
   }
+
+  const currentPref = profileData?.routePreference || user?.routePreference || 'STANDARD';
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -51,12 +54,19 @@ export default function ProfileScreen() {
             {user?.fullName?.charAt(0).toUpperCase() || 'U'}
           </Text>
         </View>
-        <Text style={styles.name}>{user?.fullName}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
+        <Text style={styles.name}>{profileData?.fullName || user?.fullName}</Text>
+        <Text style={styles.email}>{profileData?.email || user?.email}</Text>
         
         {profileData?.phoneNumber && (
           <Text style={styles.phone}>{profileData.phoneNumber}</Text>
         )}
+
+        <View style={styles.preferenceBadgeContainer}>
+          <Text style={styles.preferenceLabel}>Route Preference:</Text>
+          <View style={styles.preferencePill}>
+            <Text style={styles.preferencePillText}>{currentPref}</Text>
+          </View>
+        </View>
       </Card>
 
       <View style={styles.settingsSection}>
@@ -138,6 +148,32 @@ const styles = StyleSheet.create({
   phone: {
     fontSize: 16,
     color: '#8E8E93',
+  },
+  preferenceBadgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 8,
+  },
+  preferenceLabel: {
+    fontSize: 13,
+    color: '#636366',
+    fontWeight: '500',
+  },
+  preferencePill: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  preferencePillText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   settingsSection: {
     marginTop: 24,

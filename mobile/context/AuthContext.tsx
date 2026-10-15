@@ -1,13 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { AuthResponse } from '../services/auth';
+import { AuthResponse, AuthUser } from '../services/auth';
+import { UserService, UserProfile } from '../services/user';
 
 interface AuthContextType {
   token: string | null;
-  user: AuthResponse['user'] | null;
+  user: AuthUser | null;
   isLoading: boolean;
   login: (data: AuthResponse) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updatedFields: Partial<AuthUser>) => Promise<void>;
+  refreshProfile: () => Promise<UserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -22,7 +25,7 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthResponse['user'] | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -60,8 +63,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   };
 
+  const updateUser = async (updatedFields: Partial<AuthUser>) => {
+    if (!user) return;
+    const updatedUser: AuthUser = { ...user, ...updatedFields };
+    await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  };
+
+  const refreshProfile = async (): Promise<UserProfile | null> => {
+    try {
+      const profile = await UserService.getProfile();
+      const updatedUser: AuthUser = {
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.fullName,
+        phoneNumber: profile.phoneNumber,
+        routePreference: profile.routePreference,
+      };
+      await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+      return profile;
+    } catch (e) {
+      console.warn('Failed to refresh user profile from backend', e);
+      return null;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ token, user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ token, user, isLoading, login, logout, updateUser, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

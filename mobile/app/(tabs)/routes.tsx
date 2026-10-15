@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -16,6 +16,7 @@ import { Card } from '../../components/Card';
 import { api } from '../../services/api';
 import { fetchHeatmap, HeatmapSegment } from '../../services/heatmap';
 import { WeatherWidget } from '../../components/WeatherWidget';
+import { useAuth } from '../../context/AuthContext';
 
 export interface Coordinate {
   latitude: number;
@@ -76,6 +77,8 @@ const PRESET_LOCATIONS = [
 ];
 
 export default function RoutesScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{
     endLat?: string;
     endLon?: string;
@@ -153,13 +156,23 @@ export default function RoutesScreen() {
         endLat: eLat,
         endLon: eLon,
         travelMode: 'WALKING',
+        routePreference: user?.routePreference || 'STANDARD',
       };
 
       const response = await api.post('/routes/search', payload);
       setSearchResponse(response.data);
 
-      // Default to SAFEST if distinct, otherwise FASTEST
-      if (response.data.safestRoute && response.data.safestRoute.safetyScore !== null) {
+      // Prioritize mode based on user's route preference
+      if (user?.routePreference === 'FASTEST') {
+        setSelectedMode('FASTEST');
+      } else if (
+        user?.routePreference === 'BALANCED' ||
+        user?.routePreference === 'SOLO_TRAVELLER' ||
+        user?.routePreference === 'TOURIST' ||
+        user?.routePreference === 'ELDERLY'
+      ) {
+        setSelectedMode('BALANCED');
+      } else if (response.data.safestRoute && response.data.safestRoute.safetyScore !== null) {
         setSelectedMode('SAFEST');
       } else {
         setSelectedMode('FASTEST');
@@ -309,6 +322,22 @@ export default function RoutesScreen() {
           </View>
         </View>
 
+        {/* Active Route Preference Pill */}
+        <TouchableOpacity
+          style={styles.prefBanner}
+          onPress={() => router.push('/settings')}
+          accessibilityRole="button"
+          accessibilityLabel="View and adjust route preference"
+        >
+          <View style={styles.prefBannerLeft}>
+            <Text style={styles.prefBannerLabel}>Route Preference:</Text>
+            <View style={styles.prefBannerPill}>
+              <Text style={styles.prefBannerValue}>{user?.routePreference || 'STANDARD'}</Text>
+            </View>
+          </View>
+          <Text style={styles.prefBannerAction}>Customize ›</Text>
+        </TouchableOpacity>
+
         <Button
           title={loading ? 'Comparing Routes...' : 'Compare Routes'}
           onPress={handleSearchRoutes}
@@ -430,6 +459,18 @@ export default function RoutesScreen() {
                       {mode}
                     </Text>
                   </View>
+
+                  {mode === 'BALANCED' &&
+                    user?.routePreference &&
+                    ['SOLO_TRAVELLER', 'TOURIST', 'ELDERLY'].includes(user.routePreference) && (
+                      <Text style={styles.personalizedSubText}>
+                        {user.routePreference === 'SOLO_TRAVELLER'
+                          ? 'Solo'
+                          : user.routePreference === 'TOURIST'
+                          ? 'Tourist'
+                          : 'Elderly'}
+                      </Text>
+                    )}
 
                   <Text style={styles.optionDuration}>{formatDuration(r.durationSeconds)}</Text>
                   <Text style={styles.optionDistance}>{formatDistance(r.distanceMeters)}</Text>
@@ -1022,5 +1063,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  prefBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  prefBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  prefBannerLabel: {
+    fontSize: 13,
+    color: '#636366',
+    fontWeight: '500',
+  },
+  prefBannerPill: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  prefBannerValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  prefBannerAction: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  personalizedSubText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#5856D6',
+    backgroundColor: '#EBF4FF',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    alignSelf: 'center',
+    marginTop: 2,
   },
 });

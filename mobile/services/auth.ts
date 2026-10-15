@@ -1,12 +1,18 @@
 import { api } from './api';
 
+import { RoutePreference } from './user';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  phoneNumber?: string | null;
+  routePreference?: RoutePreference;
+}
+
 export interface AuthResponse {
   token: string;
-  user: {
-    id: string;
-    email: string;
-    fullName: string;
-  };
+  user: AuthUser;
 }
 
 export const AuthService = {

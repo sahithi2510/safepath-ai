@@ -40,8 +40,8 @@
 | 20 | Safety Heatmap | ✅ COMPLETE | Viewport heatmap API, PostGIS spatial query, bounded batch ML inference, React Native overlay & legend |
 | 21 | Community Reports | ✅ COMPLETE | Citizen reporting lifecycle, optional spatial attribution, sliding-window rate limiting, mobile submit & history UI |
 | 22 | Safe Zones | ✅ COMPLETE | Safe zone data model & migration, PostGIS bbox/proximity query, public API, mobile directory & map overlay |
-| 23 | Weather Integration | ⬜ NOT STARTED | |
-| 24 | Personalization | ⬜ NOT STARTED | |
+| 23 | Weather Integration | ✅ COMPLETE | Open-Meteo client, cache, weather widget & route integration |
+| 24 | Personalization | ✅ COMPLETE | Profile editing, 7 route preferences, settings UI, middle-route A* personalization, routes wiring |
 | 25 | SOS / Emergency Features | ⬜ NOT STARTED | |
 | 26 | Testing | ⬜ NOT STARTED | |
 | 27 | Security Review | ⬜ NOT STARTED | |
@@ -823,10 +823,67 @@ None.
 
 ---
 
+## Milestone 24 — Personalization
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement user profile management and personalized routing preferences across backend routing engine and mobile client.
+
+### Backend Enhancements
+
+- **Genuine Route Preferences Support:**
+  - Verified backend accepts all 7 `RoutePreference` enum constants: `STANDARD`, `FASTEST`, `BALANCED`, `SAFEST`, `SOLO_TRAVELLER`, `TOURIST`, and `ELDERLY`.
+  - Configured normalized weight vectors in `RoutingProperties`:
+    - `STANDARD`: $\alpha = 0.34, \beta = 0.33, \gamma = 0.33$
+    - `FASTEST`: $\alpha = 0.70, \beta = 0.20, \gamma = 0.10$
+    - `BALANCED`: $\alpha = 0.40, \beta = 0.20, \gamma = 0.40$
+    - `SAFEST`: $\alpha = 0.20, \beta = 0.10, \gamma = 0.70$
+    - `SOLO_TRAVELLER`: $\alpha = 0.20, \beta = 0.10, \gamma = 0.70$
+    - `TOURIST`: $\alpha = 0.10, \beta = 0.10, \gamma = 0.80$
+    - `ELDERLY`: $\alpha = 0.30, \beta = 0.10, \gamma = 0.60$
+- **Dynamic Middle-Route Personalization:**
+  - Updated `RouteService.searchRoutes` to honor user-selected or saved profile preference.
+  - Middle route calculation dynamically calculates A* cost based on `personalizedPreference`, enriching route notes and `importantFactors` with personalized profile attribution.
+- **User Profile Management:**
+  - Validated and tested `GET /api/users/me` and `PUT /api/users/me` (`UserController`, `UserService`).
+  - Added unit test suites: `UserControllerTest` (3 tests), `UserServiceTest` (5 tests), `RoutingPropertiesTest` (5 tests), `RouteComparisonServiceTest` (8 tests).
+
+### Mobile Implementation
+
+- **Profile Editing (`mobile/app/edit-profile.tsx`):**
+  - Full name (required, min 2 chars, max 100 chars) and phone number validation.
+  - Read-only verified email display.
+  - Loading, saving, error banners, and success feedback states.
+  - Syncs updated profile to `AuthContext` and Expo `SecureStore`.
+- **Routing Preferences (`mobile/app/settings.tsx`):**
+  - Rich selectable cards for all 7 genuine backend route preferences.
+  - Weight breakdown chips (Safety %, Time %, Distance %) and category badges.
+  - Visual indicators for current active preference vs unsaved selection.
+  - Real-time API update via `PUT /api/users/me` with feedback and context sync.
+- **Route Search Integration (`mobile/app/(tabs)/routes.tsx`):**
+  - Wires `routePreference` directly into `POST /api/routes/search` payload.
+  - Automatically highlights default tab based on user preference profile.
+  - Renders active route preference banner with quick shortcut to settings.
+  - Labels personalized middle route with personalized category badges.
+- **Profile Screen (`mobile/app/(tabs)/profile.tsx`):**
+  - Displays user's active route preference pill.
+  - Automatically refreshes profile data on screen focus via `useFocusEffect`.
+- **User Client Service (`mobile/services/user.ts`):**
+  - Typed DTOs and API methods for `getProfile` and `updateProfile`.
+
+### Verification
+
+- Backend tests: 137 tests run, 0 failures, 0 errors, 3 skipped (requiring live containers).
+- Mobile static type check: `tsc --noEmit` executed with 0 errors.
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-15 | Dynamic Middle-Route Personalization | Route comparison's middle route adapts its A* cost weights to the user's active preference profile, generating personalized alternatives without breaking the 3-route comparison contract |
+| 2026-10-15 | Selective Field Patching in UserService.updateProfile | Updates only non-null fields in UpdateProfileRequest to prevent accidental wiping of unmentioned user profile attributes |
+| 2026-10-15 | Synchronized AuthContext Secure Storage Update | Updating Expo SecureStore alongside React context state ensures profile updates persist across mobile app restarts |
 | 2026-10-15 | SimpleClientHttpRequestFactory for Uvicorn HTTP/1.1 | Prevents Java 21 / Spring 6.1 RestClient from sending HTTP/2 cleartext upgrades (h2c) that cause Uvicorn 422 Unprocessable Entity body rejections |
 | 2026-10-15 | RestClient Validation Response Body Propagation | Logs and exposes e.getResponseBodyAsString() upon HTTP 400 and 422 errors to ensure upstream schema validation failures are never obscured |
 | 2026-10-15 | Empirical Automated Test Accounting Protocol | Derives test counts strictly from Surefire and Pytest XML/execution reports (128 Java + 63 Python = 191 total), rejecting arbitrary arithmetic totals |
