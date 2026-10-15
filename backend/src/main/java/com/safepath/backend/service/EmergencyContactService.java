@@ -54,26 +54,43 @@ public class EmergencyContactService {
 
         User user = userService.getUserByEmail(userDetails.getUsername());
 
-        if (contactRepository.countByUserId(user.getId()) >= MAX_CONTACTS) {
+        List<EmergencyContact> userContacts = contactRepository
+                .findByUserIdOrderByPrimaryDescCreatedAtAsc(user.getId());
+
+        if (userContacts.size() >= MAX_CONTACTS) {
             throw new SafePathException(
                 "Maximum " + MAX_CONTACTS + " emergency contacts allowed",
                 HttpStatus.BAD_REQUEST);
         }
 
+        boolean makePrimary = request.isPrimary() || userContacts.isEmpty();
+
+        if (makePrimary) {
+            for (EmergencyContact existing : userContacts) {
+                if (existing.isPrimary()) {
+                    existing.setPrimary(false);
+                    contactRepository.save(existing);
+                }
+            }
+        }
+
         EmergencyContact contact = EmergencyContact.builder()
                 .user(user)
-                .name(request.getName())
-                .phoneNumber(request.getPhoneNumber())
-                .relationship(request.getRelationship())
-                .primary(request.isPrimary())
+                .name(request.getName().trim())
+                .phoneNumber(request.getPhoneNumber().trim())
+                .relationship(request.getRelationship() != null ? request.getRelationship().trim() : null)
+                .primary(makePrimary)
                 .build();
 
-        return EmergencyContactDto.Response.from(contactRepository.save(contact));
+        EmergencyContact saved = contactRepository.save(contact);
+        log.info("Emergency contact {} added for user {}", saved.getId(), user.getEmail());
+        return EmergencyContactDto.Response.from(saved);
     }
 
     /**
      * Delete an emergency contact.
      * Ensures the contact belongs to the requesting user.
+     * If the deleted contact was primary and others exist, reassigns primary.
      */
     @Transactional
     public void deleteContact(UserDetails userDetails, UUID contactId) {
@@ -85,7 +102,28 @@ public class EmergencyContactService {
             throw new SafePathException("Access denied", HttpStatus.FORBIDDEN);
         }
 
+        boolean wasPrimary = contact.isPrimary();
         contactRepository.delete(contact);
         log.info("Emergency contact {} deleted for user {}", contactId, user.getEmail());
+
+        if (wasPrimary) {
+            List<EmergencyContact> remaining = contactRepository
+                    .findByUserIdOrderByPrimaryDescCreatedAtAsc(user.getId());
+            if (!remaining.isEmpty()) {
+                EmergencyContact nextPrimary = remaining.get(0);
+                nextPrimary.setPrimary(true);
+                contactRepository.save(nextPrimary);
+                log.info("Reassigned primary emergency contact to {} for user {}",
+                        nextPrimary.getId(), user.getEmail());
+            }
+        }
+    }
+
+    /**
+     * Internal lookup for user contacts (used in SOS workflow).
+     */
+    @Transactional(readOnly = true)
+    public List<EmergencyContact> getContactsEntity(User user) {
+        return contactRepository.findByUserIdOrderByPrimaryDescCreatedAtAsc(user.getId());
     }
 }

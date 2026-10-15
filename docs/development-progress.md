@@ -8,9 +8,9 @@
 
 ## Current Status
 
-**Overall Progress:** Milestone 22 — Safe Zones (COMPLETE)
+**Overall Progress:** Milestone 25 — SOS / Emergency Features (COMPLETE)
 
-**Last Updated:** 2026-10-14
+**Last Updated:** 2026-10-15
 
 ---
 
@@ -42,7 +42,7 @@
 | 22 | Safe Zones | ✅ COMPLETE | Safe zone data model & migration, PostGIS bbox/proximity query, public API, mobile directory & map overlay |
 | 23 | Weather Integration | ✅ COMPLETE | Open-Meteo client, cache, weather widget & route integration |
 | 24 | Personalization | ✅ COMPLETE | Profile editing, 7 route preferences, settings UI, middle-route A* personalization, routes wiring |
-| 25 | SOS / Emergency Features | ⬜ NOT STARTED | |
+| 25 | SOS / Emergency Features | ✅ COMPLETE | Emergency contacts (max 5), primary contact consistency, audit-logged SOS endpoint, 112/100/108 helplines, mobile SOS screen |
 | 26 | Testing | ⬜ NOT STARTED | |
 | 27 | Security Review | ⬜ NOT STARTED | |
 | 28 | Documentation | ⬜ NOT STARTED | |
@@ -877,10 +877,70 @@ None.
 
 ---
 
+## Milestone 25 — SOS / Emergency Features
+
+**Status:** ✅ COMPLETE  
+**Goal:** Implement authenticated emergency contact management, immutable SOS audit logging, official helpline shortcuts, and emergency mobile UI.
+
+### Backend Implementation
+
+- **Audit Logging Architecture:**
+  - Created `AuditLog` JPA entity mapping directly to table `audit_logs` created in Flyway migration `V11__create_audit_logs.sql`.
+  - Added `AuditLogRepository` and `AuditLogService` for recording immutable compliance and safety audit events (`SOS_TRIGGERED`).
+  - Serializes location coordinates, user context, client IP, and contact counts into structured JSON details.
+- **Emergency Contacts Management (`EmergencyContactService`):**
+  - Enforces hard limit of maximum 5 contacts per user (`MAX_CONTACTS = 5`).
+  - Validates contact phone format using regex pattern `^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{5,20}$`.
+  - Maintained single primary contact invariant:
+    - Setting a new contact as primary automatically demotes existing primary contacts.
+    - If user has no contacts, their first added contact automatically defaults to primary.
+    - If a primary contact is deleted and other contacts remain, the primary flag automatically reassigns to the next available contact.
+  - Server-side authorization:
+    - Strictly isolates contact access to the authenticated user's ID (`contact.getUser().getId().equals(user.getId())`).
+    - Prevents unauthorized deletion attempts with `403 Forbidden` (`SafePathException`).
+- **SOS Triggering (`EmergencyController`):**
+  - Accepts optional GPS coordinates (`latitude`, `longitude`) and note.
+  - Validates coordinate bounds ($\text{lat} \in [-90, 90]$, $\text{lon} \in [-180, 180]$) and enforces that latitude/longitude must be supplied together.
+  - Logs client IP (supporting `X-Forwarded-For` proxy headers).
+  - Returns `SosResponse` with `logged: true`, generated `eventId`, timestamp, and emergency contacts count.
+- **Automated Tests:**
+  - `EmergencyContactServiceTest` (8 tests): Verifies contact retrieval isolation, primary contact auto-promotion, previous primary demotion, max 5 limit rejection, cross-user delete prohibition (403), 404 handling, and primary reassignment.
+  - `EmergencyControllerTest` (7 tests): Verifies contact CRUD controller responses, SOS audit logging with coordinates, SOS without coordinates, out-of-range coordinates rejection (400), and mismatched coordinates rejection (400).
+  - Full backend test suite: 152 tests run, 0 failures, 0 errors, 3 skipped.
+
+### Mobile Implementation
+
+- **Emergency Screen (`mobile/app/emergency.tsx`):**
+  - **SOS Trigger Action:**
+    - High-visibility tactile emergency trigger card with `🚨 TRIGGER SOS ALERT`.
+    - Mandatory confirmation modal preventing accidental triggers.
+    - Requests foreground GPS permission via `expo-location` and attaches current coordinates if available.
+    - Clear safety disclaimer explaining that pressing SOS logs a security audit event on the server, but does *not* automatically call 911/112 or dispatch first responders.
+    - Real-time audit receipt banner displaying event ID, timestamp, and coordinates upon successful trigger.
+  - **Direct Emergency Helplines:**
+    - Integrated official Indian emergency numbers: **112** (National Emergency), **100** (Police), **108** (Ambulance), and **1091** (Women Safety).
+    - Platform-safe phone dialing (`Linking.openURL('tel:...')`) with user confirmation.
+    - 100% operational even in offline or network error states.
+  - **Trusted Contacts Management:**
+    - Shows list of saved contacts (X/5) with names, relationships, phone numbers, and `PRIMARY` badge.
+    - One-tap phone calling with confirmation.
+    - One-tap emergency SMS generation (`Linking.openURL('sms:...?body=...')`) with Google Maps link to current coordinates.
+    - Add contact form with live validation and primary contact toggle.
+    - Delete contact with confirmation prompt.
+- **Emergency Client Service (`mobile/services/emergency.ts`):**
+  - Typed API client for `getContacts`, `addContact`, `deleteContact`, `triggerSos`, and `OFFICIAL_HELPLINES` registry.
+- **TypeScript Static Verification:**
+  - `tsc --noEmit` executed with 0 errors.
+
+---
+
 ## Architecture Decisions Log
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-15 | Audit-Only SOS Semantics & Explicit Non-Dispatch Disclosure | Transparently informs users that pressing SOS creates an immutable database security audit log without misrepresenting it as automatic police dispatch, which requires statutory telephony agreements |
+| 2026-10-15 | Singular Primary Emergency Contact Invariant | Demoting previous primary contacts on new primary additions and reassigning upon deletion ensures the user always has exactly one designated primary contact |
+| 2026-10-15 | Offline-Resilient Telephony Dialer Fallbacks | Directly launching device telephony schemes (`tel:112`, `tel:...`) ensures emergency calls remain 100% accessible even when offline or when backend API requests fail |
 | 2026-10-15 | Dynamic Middle-Route Personalization | Route comparison's middle route adapts its A* cost weights to the user's active preference profile, generating personalized alternatives without breaking the 3-route comparison contract |
 | 2026-10-15 | Selective Field Patching in UserService.updateProfile | Updates only non-null fields in UpdateProfileRequest to prevent accidental wiping of unmentioned user profile attributes |
 | 2026-10-15 | Synchronized AuthContext Secure Storage Update | Updating Expo SecureStore alongside React context state ensures profile updates persist across mobile app restarts |
