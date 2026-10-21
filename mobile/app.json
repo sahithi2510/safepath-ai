@@ -39,6 +39,12 @@
     "scheme": "safepath",
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ce169e98-651d-4523-a864-8f98aec1b1a7"
+      }
     }
   }
 }
