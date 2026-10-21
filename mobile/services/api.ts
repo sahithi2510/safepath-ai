@@ -1,18 +1,36 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
+const DEFAULT_API_URL = process.env.EXPO_PUBLIC_API_URL || process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080/api';
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: DEFAULT_API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 10000,
 });
 
-// Add a request interceptor to inject the JWT token
+export const getApiBaseUrl = async (): Promise<string> => {
+  const custom = await SecureStore.getItemAsync('custom_api_url');
+  return custom || DEFAULT_API_URL;
+};
+
+export const setApiBaseUrl = async (url: string): Promise<void> => {
+  if (url && url.trim()) {
+    await SecureStore.setItemAsync('custom_api_url', url.trim());
+  } else {
+    await SecureStore.deleteItemAsync('custom_api_url');
+  }
+};
+
+// Add a request interceptor to inject the JWT token and custom server URL
 api.interceptors.request.use(
   async (config) => {
+    const customUrl = await SecureStore.getItemAsync('custom_api_url');
+    if (customUrl) {
+      config.baseURL = customUrl;
+    }
     const token = await SecureStore.getItemAsync('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

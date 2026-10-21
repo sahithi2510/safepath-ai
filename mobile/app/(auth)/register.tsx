@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
+import { ServerConfigModal } from '../../components/ServerConfigModal';
 import { AuthService } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
 
@@ -12,6 +13,7 @@ export default function RegisterScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverModalVisible, setServerModalVisible] = useState(false);
   
   const router = useRouter();
   const { login } = useAuth();
@@ -28,7 +30,11 @@ export default function RegisterScreen() {
       await login(data);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.response?.data?.message || 'Network error');
+      Alert.alert(
+        'Registration Failed',
+        error.response?.data?.message ||
+          'Network error: could not connect to backend server. Tap "Server Settings" below to configure your server address.'
+      );
     } finally {
       setLoading(false);
     }
@@ -88,7 +94,19 @@ export default function RegisterScreen() {
           onPress={() => router.back()} 
           disabled={loading}
         />
+
+        <TouchableOpacity 
+          style={styles.serverSettingsLink}
+          onPress={() => setServerModalVisible(true)}
+        >
+          <Text style={styles.serverSettingsText}>⚙️ Server Settings / Change API URL</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      <ServerConfigModal 
+        visible={serverModalVisible} 
+        onClose={() => setServerModalVisible(false)} 
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -116,5 +134,15 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 16,
-  }
+  },
+  serverSettingsLink: {
+    marginTop: 16,
+    alignItems: 'center',
+    padding: 8,
+  },
+  serverSettingsText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });

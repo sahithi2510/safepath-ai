@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
+import { ServerConfigModal } from '../../components/ServerConfigModal';
 import { AuthService } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
 
@@ -10,6 +11,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverModalVisible, setServerModalVisible] = useState(false);
   const router = useRouter();
   const { login } = useAuth();
 
@@ -25,7 +27,11 @@ export default function LoginScreen() {
       await login(data);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.response?.data?.message || 'Invalid credentials or network error');
+      Alert.alert(
+        'Login Failed',
+        error.response?.data?.message ||
+          'Network error: could not connect to backend server. Tap "Server Settings" below to configure your server address.'
+      );
     } finally {
       setLoading(false);
     }
@@ -70,7 +76,19 @@ export default function LoginScreen() {
           onPress={() => router.push('/(auth)/register')} 
           disabled={loading}
         />
+
+        <TouchableOpacity 
+          style={styles.serverSettingsLink}
+          onPress={() => setServerModalVisible(true)}
+        >
+          <Text style={styles.serverSettingsText}>⚙️ Server Settings / Change API URL</Text>
+        </TouchableOpacity>
       </View>
+
+      <ServerConfigModal 
+        visible={serverModalVisible} 
+        onClose={() => setServerModalVisible(false)} 
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -98,5 +116,15 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 16,
-  }
+  },
+  serverSettingsLink: {
+    marginTop: 20,
+    alignItems: 'center',
+    padding: 8,
+  },
+  serverSettingsText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
