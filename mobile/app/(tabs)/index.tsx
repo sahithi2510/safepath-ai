@@ -9,7 +9,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps';
+import MapView, { Marker, Polyline, Region, UrlTile } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Card } from '../../components/Card';
@@ -239,6 +239,14 @@ export default function MapScreen() {
         showsUserLocation={!permissionDenied && !!userLocation}
         showsMyLocationButton={!permissionDenied}
       >
+        {/* OpenStreetMap Tile Layer Fallback (renders street maps without Google Maps API Key) */}
+        <UrlTile
+          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maximumZ={19}
+          flipY={false}
+          zIndex={-1}
+        />
+
         {/* User location marker if available */}
         {userLocation && (
           <Marker
@@ -826,7 +834,7 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#F2F2F7',
   },
   map: {
     width: '100%',

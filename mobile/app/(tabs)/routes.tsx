@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -542,6 +542,13 @@ export default function RoutesScreen() {
                 longitudeDelta: 0.02,
               }}
             >
+              {/* OpenStreetMap Tile Layer Fallback (renders street maps without Google Maps API Key) */}
+              <UrlTile
+                urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                maximumZ={19}
+                flipY={false}
+                zIndex={-1}
+              />
               {/* Safety Heatmap Underlay Segments */}
               {showHeatmap &&
                 heatmapSegments.map((seg) => (
@@ -931,6 +938,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#C6C6C8',
+    backgroundColor: '#F2F2F7',
   },
   map: {
     width: '100%',
