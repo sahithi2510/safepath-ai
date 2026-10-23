@@ -1,5 +1,4 @@
 import { api } from './api';
-
 import { RoutePreference } from './user';
 
 export interface AuthUser {
@@ -22,13 +21,14 @@ export const AuthService = {
   },
   
   register: async (email: string, password: string, fullName: string, phoneNumber?: string): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/register', { 
+    await api.post('/auth/register', { 
       email, 
       password, 
-      fullName,
+      fullName, 
       phoneNumber 
     });
-    return response.data;
+    // Automatically log in to retrieve the JWT token and user profile
+    return await AuthService.login(email, password);
   },
   
   me: async () => {

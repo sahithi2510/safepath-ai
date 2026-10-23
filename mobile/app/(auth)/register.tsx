@@ -30,11 +30,8 @@ export default function RegisterScreen() {
       await login(data);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert(
-        'Registration Failed',
-        error.response?.data?.message ||
-          'Network error: could not connect to backend server. Tap "Server Settings" below to configure your server address.'
-      );
+      const msg = error.response?.data?.message || (error.response ? 'Registration failed on server' : (error.message || 'Network error: could not connect to server'));
+      Alert.alert('Registration Failed', msg);
     } finally {
       setLoading(false);
     }
