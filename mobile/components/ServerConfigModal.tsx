@@ -46,7 +46,10 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({ visible, o
     const healthUrl = trimmed.endsWith('/api') ? `${trimmed}/health` : `${trimmed}/api/health`;
 
     try {
-      const response = await axios.get(healthUrl, { timeout: 5000 });
+      const response = await axios.get(healthUrl, {
+        timeout: 5000,
+        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+      });
       if (response.status >= 200 && response.status < 300) {
         setTestResult({
           success: true,
