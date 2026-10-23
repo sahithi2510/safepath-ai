@@ -15,7 +15,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:safepath_db}}
     username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:safepath_user}}
-    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:CHANGE_ME_STRONG_PASSWORD}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -93,7 +93,7 @@ safepath:
 
   # JWT
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:CHANGE_ME_VERY_LONG_RANDOM_SECRET_AT_LEAST_256_BITS}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
   # ML Service
