@@ -1131,6 +1131,7 @@ None.
 | 2026-10-26 | Global Pedestrian Routing & OpenStreetMap OSRM Fallback | Added OpenStreetMap OSRM pedestrian fallback engine in RouteService to dynamically route across any coordinates worldwide (e.g. Guntur, AP) without "no road network segments" error, calculating distinct FASTEST, BALANCED, SAFEST alternatives |
 | 2026-10-26 | Place-Name-Based Search & Reverse-Geocoding | Added OpenStreetMap Nominatim geocoding & reverse geocoding to resolve human-readable place names, GPS location autofill, and live autocomplete suggestions in Route Planning screen |
 | 2026-10-26 | Map Pinch-Zoom Touch Stabilization | Resolved Android WebView pinch jitter by adding scrollEnabled={false}, overScrollMode="never", touch-action: none, and smooth Leaflet touchZoom options |
+| 2026-10-26 | Leaflet WebView Memoization & Zoom-Out Fix | Fixed automatic zoom-out bug by memoizing htmlContent and source object via useRef/useMemo in LeafletMap, preventing WebView reloads and preserving user zoom levels across all re-renders |
 
 
 
