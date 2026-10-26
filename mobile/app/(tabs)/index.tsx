@@ -9,7 +9,8 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import MapView, { Marker, Polyline, Region, UrlTile } from 'react-native-maps';
+import { LeafletMap, LeafletMapRef, LeafletRegion } from '../../components/LeafletMap';
+type Region = LeafletRegion;
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Card } from '../../components/Card';
@@ -53,7 +54,7 @@ const SAMPLE_ROUTE_COORDS: Coordinate[] = [
 
 export default function MapScreen() {
   const router = useRouter();
-  const mapRef = useRef<MapView | null>(null);
+  const mapRef = useRef<LeafletMapRef | null>(null);
 
   // User location and permissions
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
@@ -230,97 +231,35 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Interactive Map */}
-      <MapView
+      {/* Interactive Free OpenStreetMap / CartoDB Map (Zero API Key Dependency) */}
+      <LeafletMap
         ref={mapRef}
         style={styles.map}
         initialRegion={currentRegion}
         onRegionChangeComplete={handleRegionChangeComplete}
-        showsUserLocation={!permissionDenied && !!userLocation}
-        showsMyLocationButton={!permissionDenied}
-      >
-        {/* OpenStreetMap Tile Layer Fallback (renders street maps without Google Maps API Key) */}
-        <UrlTile
-          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-          flipY={false}
-          zIndex={-1}
-        />
-
-        {/* User location marker if available */}
-        {userLocation && (
-          <Marker
-            coordinate={{
-              latitude: userLocation.coords.latitude,
-              longitude: userLocation.coords.longitude,
-            }}
-            title="You are here"
-            accessibilityLabel="Current user location"
-          />
-        )}
-
-        {/* Heatmap Road Segment Overlays */}
-        {heatmapEnabled &&
-          heatmapData?.segments.map((segment) => {
-            const isSelected = selectedSegment?.segmentId === segment.segmentId;
-            const isUnscored = segment.scoringStatus !== 'SCORED';
-
-            return (
-              <Polyline
-                key={`segment-${segment.segmentId}`}
-                coordinates={segment.coordinates}
-                strokeColor={isSelected ? '#007AFF' : segment.colorHex}
-                strokeWidth={isSelected ? 6 : 4}
-                lineDashPattern={isUnscored ? [6, 4] : undefined}
-                tappable={true}
-                onPress={() => setSelectedSegment(segment)}
-              />
-            );
-          })}
-
-        {/* Safe Zone Facility Markers */}
-        {safeZonesEnabled &&
-          safeZones.map((zone) => {
-            const cat = SAFE_ZONE_CATEGORIES[zone.zoneType] || SAFE_ZONE_CATEGORIES.OTHER;
-            return (
-              <Marker
-                key={`safezone-${zone.id}`}
-                coordinate={{
-                  latitude: zone.latitude,
-                  longitude: zone.longitude,
-                }}
-                title={`${cat.icon} ${zone.name}`}
-                description={`${cat.label} • ${zone.verificationStatus}`}
-                pinColor={cat.pinColor}
-                onPress={() => {
-                  setSelectedSegment(null);
-                  setSelectedSafeZone(zone);
-                }}
-              />
-            );
-          })}
-
-        {/* Coexisting Route Polyline (Demonstration of route-heatmap coexistence) */}
-        {showSampleRoute && (
-          <>
-            <Polyline
-              coordinates={SAMPLE_ROUTE_COORDS}
-              strokeColor="#007AFF"
-              strokeWidth={7}
-            />
-            <Marker
-              coordinate={SAMPLE_ROUTE_COORDS[0]}
-              title="Route Start"
-              pinColor="green"
-            />
-            <Marker
-              coordinate={SAMPLE_ROUTE_COORDS[SAMPLE_ROUTE_COORDS.length - 1]}
-              title="Route Destination"
-              pinColor="red"
-            />
-          </>
-        )}
-      </MapView>
+        userLocation={
+          userLocation
+            ? {
+                latitude: userLocation.coords.latitude,
+                longitude: userLocation.coords.longitude,
+              }
+            : null
+        }
+        heatmapSegments={heatmapEnabled ? heatmapData?.segments : []}
+        selectedSegmentId={selectedSegment?.segmentId}
+        onSegmentSelect={(seg) => {
+          setSelectedSafeZone(null);
+          const full = heatmapData?.segments.find((s) => String(s.segmentId) === String(seg.segmentId));
+          if (full) setSelectedSegment(full);
+        }}
+        safeZones={safeZonesEnabled ? safeZones : []}
+        onSafeZoneSelect={(zone) => {
+          setSelectedSegment(null);
+          const full = safeZones.find((z) => String(z.id) === String(zone.id));
+          if (full) setSelectedSafeZone(full);
+        }}
+        sampleRouteCoords={showSampleRoute ? SAMPLE_ROUTE_COORDS : null}
+      />
 
       {/* Floating Top Header Bar */}
       <View style={styles.topHeaderContainer}>

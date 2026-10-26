@@ -1126,6 +1126,7 @@ None.
 | 2026-10-23 | OpenStreetMap UrlTile Overlay Fallback | Adds OpenStreetMap tile layer fallback to React Native Maps to render tiles on Android APKs without requiring a billed Google Maps API key |
 | 2026-10-23 | Hibernate 6 Spatial Cast Syntax Fix | Replaced PostgreSQL `::geography` cast with standard SQL `CAST(... AS geography)` in native repository queries to resolve parameter parsing errors |
 | 2026-10-23 | Central Bangalore Walkable Network Seed (DEMO) | Added V17 migration with 8 interconnected road segments and 5 safe zones in Central Bangalore (clearly marked DEMO DATA) for routing engine testing |
+| 2026-10-26 | Zero-Key Leaflet & OpenStreetMap/CartoDB Voyager Integration | Replaces native Google Maps SDK with high-performance LeafletMap component, eliminating Google Maps API key / billing dependency while rendering routes, safe zones, and safety heatmaps flawlessly |
 
 
 

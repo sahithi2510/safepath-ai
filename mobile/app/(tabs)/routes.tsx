@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
+import { LeafletMap, LeafletRoute } from '../../components/LeafletMap';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
@@ -531,9 +531,9 @@ export default function RoutesScreen() {
             )}
           </View>
 
-          {/* Interactive Map */}
+          {/* Interactive Map (OpenStreetMap / CartoDB Voyager, Zero API Key Dependency) */}
           <View style={styles.mapWrapper}>
-            <MapView
+            <LeafletMap
               style={styles.map}
               initialRegion={{
                 latitude: (parseFloat(startLat) + parseFloat(endLat)) / 2 || 12.9736,
@@ -541,81 +541,50 @@ export default function RoutesScreen() {
                 latitudeDelta: 0.02,
                 longitudeDelta: 0.02,
               }}
-            >
-              {/* OpenStreetMap Tile Layer Fallback (renders street maps without Google Maps API Key) */}
-              <UrlTile
-                urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maximumZ={19}
-                flipY={false}
-                zIndex={-1}
-              />
-              {/* Safety Heatmap Underlay Segments */}
-              {showHeatmap &&
-                heatmapSegments.map((seg) => (
-                  <Polyline
-                    key={`seg-${seg.segmentId}`}
-                    coordinates={seg.coordinates}
-                    strokeColor={seg.colorHex}
-                    strokeWidth={3}
-                    lineDashPattern={seg.scoringStatus !== 'SCORED' ? [4, 4] : undefined}
-                  />
-                ))}
-
-              {/* Unselected Polylines (Rendered first) */}
-              {(['FASTEST', 'BALANCED', 'SAFEST'] as const).map((mode) => {
-                if (mode === selectedMode) return null;
-                const r =
-                  mode === 'FASTEST'
-                    ? searchResponse.fastestRoute
-                    : mode === 'BALANCED'
-                    ? searchResponse.balancedRoute
-                    : searchResponse.safestRoute;
-
-                if (!r || !r.coordinates || r.coordinates.length < 2) return null;
-
-                return (
-                  <Polyline
-                    key={mode}
-                    coordinates={r.coordinates}
-                    strokeColor="#AEAEB2"
-                    strokeWidth={3}
-                  />
-                );
-              })}
-
-              {/* Selected Polyline (Rendered on top with vibrant highlight) */}
-              {selectedRoute &&
-                selectedRoute.coordinates &&
-                selectedRoute.coordinates.length >= 2 && (
-                  <Polyline
-                    coordinates={selectedRoute.coordinates}
-                    strokeColor={getRouteColor(selectedMode)}
-                    strokeWidth={6}
-                  />
-                )}
-
-              {/* Start & Destination Markers */}
-              {selectedRoute &&
-                selectedRoute.coordinates &&
-                selectedRoute.coordinates.length > 0 && (
-                  <>
-                    <Marker
-                      coordinate={selectedRoute.coordinates[0]}
-                      title="Origin"
-                      pinColor="green"
-                      accessibilityLabel="Origin location marker"
-                    />
-                    <Marker
-                      coordinate={
-                        selectedRoute.coordinates[selectedRoute.coordinates.length - 1]
-                      }
-                      title="Destination"
-                      pinColor="red"
-                      accessibilityLabel="Destination location marker"
-                    />
-                  </>
-                )}
-            </MapView>
+              heatmapSegments={showHeatmap ? heatmapSegments : []}
+              routes={[
+                ...(searchResponse.fastestRoute?.coordinates && searchResponse.fastestRoute.coordinates.length >= 2
+                  ? [
+                      {
+                        mode: 'FASTEST' as const,
+                        coordinates: searchResponse.fastestRoute.coordinates,
+                        colorHex: getRouteColor('FASTEST'),
+                        isSelected: selectedMode === 'FASTEST',
+                      },
+                    ]
+                  : []),
+                ...(searchResponse.balancedRoute?.coordinates && searchResponse.balancedRoute.coordinates.length >= 2
+                  ? [
+                      {
+                        mode: 'BALANCED' as const,
+                        coordinates: searchResponse.balancedRoute.coordinates,
+                        colorHex: getRouteColor('BALANCED'),
+                        isSelected: selectedMode === 'BALANCED',
+                      },
+                    ]
+                  : []),
+                ...(searchResponse.safestRoute?.coordinates && searchResponse.safestRoute.coordinates.length >= 2
+                  ? [
+                      {
+                        mode: 'SAFEST' as const,
+                        coordinates: searchResponse.safestRoute.coordinates,
+                        colorHex: getRouteColor('SAFEST'),
+                        isSelected: selectedMode === 'SAFEST',
+                      },
+                    ]
+                  : []),
+              ]}
+              origin={
+                selectedRoute?.coordinates && selectedRoute.coordinates.length > 0
+                  ? selectedRoute.coordinates[0]
+                  : { latitude: parseFloat(startLat) || 12.9756, longitude: parseFloat(startLon) || 77.6066 }
+              }
+              destination={
+                selectedRoute?.coordinates && selectedRoute.coordinates.length > 0
+                  ? selectedRoute.coordinates[selectedRoute.coordinates.length - 1]
+                  : { latitude: parseFloat(endLat) || 12.9716, longitude: parseFloat(endLon) || 77.6074 }
+              }
+            />
           </View>
 
           {/* Selected Route Detailed Card */}
