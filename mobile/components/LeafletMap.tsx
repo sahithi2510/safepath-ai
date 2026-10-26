@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { StyleSheet, View, ActivityIndicator, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 
@@ -196,15 +196,20 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
     }
   };
 
-  const initialZoom = Math.min(
-    Math.max(
-      Math.round(Math.log2(360 / Math.max(initialRegion.latitudeDelta, initialRegion.longitudeDelta))),
-      11
-    ),
-    17
-  );
+  // Capture initial region strictly on first mount so the WebView NEVER reloads on subsequent renders
+  const initialRegionRef = useRef(initialRegion);
 
-  const htmlContent = `
+  const htmlContent = useMemo(() => {
+    const init = initialRegionRef.current;
+    const initialZoom = Math.min(
+      Math.max(
+        Math.round(Math.log2(360 / Math.max(init.latitudeDelta, init.longitudeDelta))),
+        11
+      ),
+      17
+    );
+
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -326,9 +331,9 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
       touchZoom: true,
       bounceAtZoomLimits: false,
       zoomAnimation: true,
-      zoomSnap: 0.5,
-      wheelPxPerZoomLevel: 60
-    }).setView([${initialRegion.latitude}, ${initialRegion.longitude}], ${initialZoom});
+      minZoom: 3,
+      maxZoom: 19
+    }).setView([${init.latitude}, ${init.longitude}], ${initialZoom});
 
     // Official OpenStreetMap tiles (100% free, community-funded, ZERO API key requirement, NO watermark)
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -524,6 +529,9 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
 </body>
 </html>
   `;
+  }, []);
+
+  const webViewSource = useMemo(() => ({ html: htmlContent }), [htmlContent]);
 
   return (
     <View style={[styles.container, style]}>
@@ -531,7 +539,7 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
         ref={webViewRef}
         style={styles.webview}
         originWhitelist={['*']}
-        source={{ html: htmlContent }}
+        source={webViewSource}
         onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
