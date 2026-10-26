@@ -214,7 +214,16 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #map { width: 100%; height: 100%; background: #F2F2F7; }
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      background: #F2F2F7;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
     
     /* User pulsing marker */
     .user-pulse-marker {
@@ -313,7 +322,12 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
   <script>
     var map = L.map('map', {
       zoomControl: false,
-      attributionControl: true
+      attributionControl: true,
+      touchZoom: true,
+      bounceAtZoomLimits: false,
+      zoomAnimation: true,
+      zoomSnap: 0.5,
+      wheelPxPerZoomLevel: 60
     }).setView([${initialRegion.latitude}, ${initialRegion.longitude}], ${initialZoom});
 
     // Official OpenStreetMap tiles (100% free, community-funded, ZERO API key requirement, NO watermark)
@@ -521,6 +535,13 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
         onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        scalesPageToFit={false}
+        nestedScrollEnabled={false}
         startInLoadingState={true}
         renderLoading={() => (
           <View style={styles.loadingContainer}>

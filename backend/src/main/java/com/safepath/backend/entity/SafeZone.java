@@ -94,6 +94,8 @@ public class SafeZone {
     public enum VerificationStatus {
         VERIFIED,
         UNVERIFIED,
-        UNAVAILABLE
+        UNAVAILABLE,
+        OFFICIALLY_VERIFIED,
+        COMMUNITY_VERIFIED
     }
 }

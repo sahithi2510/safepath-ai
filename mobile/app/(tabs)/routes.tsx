@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
   Dimensions,
+  Platform,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LeafletMap, LeafletRoute } from '../../components/LeafletMap';
 import { Input } from '../../components/Input';
@@ -17,6 +20,7 @@ import { api } from '../../services/api';
 import { fetchHeatmap, HeatmapSegment } from '../../services/heatmap';
 import { WeatherWidget } from '../../components/WeatherWidget';
 import { useAuth } from '../../context/AuthContext';
+import { searchPlaces, reverseGeocode, GeocodedPlace } from '../../services/geocoding';
 
 export interface Coordinate {
   latitude: number;
@@ -58,21 +62,43 @@ export interface RouteSearchResponse {
   notes?: string;
 }
 
-// Preset test coordinates for Bangalore road network
-const PRESET_LOCATIONS = [
+// Preset locations for quick testing (supports both Guntur and Bangalore)
+const PRESET_PLACES = [
   {
-    name: 'MG Road to Brigade Rd',
-    startLat: 12.9756,
-    startLon: 77.6066,
-    endLat: 12.9716,
-    endLon: 77.6074,
+    name: 'Guntur Central → Brodipet',
+    startName: 'Guntur Railway Station',
+    startLat: '16.3067',
+    startLon: '80.4365',
+    endName: 'Brodipet Main Rd, Guntur',
+    endLat: '16.3120',
+    endLon: '80.4420',
   },
   {
-    name: 'Cubbon Park to Church St',
-    startLat: 12.9763,
-    startLon: 77.5929,
-    endLat: 12.9748,
-    endLon: 77.6042,
+    name: 'Brodipet → Arundelpet (Guntur)',
+    startName: 'Brodipet, Guntur',
+    startLat: '16.3120',
+    startLon: '80.4420',
+    endName: 'Arundelpet, Guntur',
+    endLat: '16.3025',
+    endLon: '80.4485',
+  },
+  {
+    name: 'MG Road → Brigade Rd (BLR)',
+    startName: 'MG Road Metro, Bangalore',
+    startLat: '12.9756',
+    startLon: '77.6066',
+    endName: 'Brigade Road, Bangalore',
+    endLat: '12.9716',
+    endLon: '77.6074',
+  },
+  {
+    name: 'Cubbon Park → Church St (BLR)',
+    startName: 'Cubbon Park, Bangalore',
+    startLat: '12.9763',
+    startLon: '77.5929',
+    endName: 'Church Street, Bangalore',
+    endLat: '12.9748',
+    endLon: '77.6042',
   },
 ];
 
@@ -85,23 +111,24 @@ export default function RoutesScreen() {
     endName?: string;
     startLat?: string;
     startLon?: string;
+    startName?: string;
   }>();
 
-  const [startLat, setStartLat] = useState('12.9756');
-  const [startLon, setStartLon] = useState('77.6066');
-  const [endLat, setEndLat] = useState('12.9716');
-  const [endLon, setEndLon] = useState('77.6074');
+  // Places state (Name-based input with GPS autofill)
+  const [startName, setStartName] = useState('My Current Location');
+  const [startLat, setStartLat] = useState('16.3067');
+  const [startLon, setStartLon] = useState('80.4365');
+  const [endName, setEndName] = useState('Brodipet, Guntur');
+  const [endLat, setEndLat] = useState('16.3120');
+  const [endLon, setEndLon] = useState('80.4420');
 
-  useEffect(() => {
-    if (params.endLat && params.endLon) {
-      setEndLat(params.endLat);
-      setEndLon(params.endLon);
-    }
-    if (params.startLat && params.startLon) {
-      setStartLat(params.startLat);
-      setStartLon(params.startLon);
-    }
-  }, [params.endLat, params.endLon, params.startLat, params.startLon]);
+  // Autocomplete and selection state
+  const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
+  const [suggestions, setSuggestions] = useState<GeocodedPlace[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [locatingUser, setLocatingUser] = useState(false);
+  const [showCoordinateDetails, setShowCoordinateDetails] = useState(false);
+  const searchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -111,14 +138,138 @@ export default function RoutesScreen() {
   const [heatmapSegments, setHeatmapSegments] = useState<HeatmapSegment[]>([]);
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
 
+  // Automatically request GPS position and reverse-geocode address
+  const handleUseCurrentLocation = async () => {
+    setLocatingUser(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setErrorMsg('Location permission not granted. You can search places by name above.');
+        setLocatingUser(false);
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const lat = loc.coords.latitude;
+      const lon = loc.coords.longitude;
+      setStartLat(lat.toString());
+      setStartLon(lon.toString());
+
+      const placeName = await reverseGeocode(lat, lon);
+      setStartName(`📍 ${placeName}`);
+      setErrorMsg(null);
+    } catch (err: any) {
+      console.warn('GPS location lookup failed:', err);
+    } finally {
+      setLocatingUser(false);
+    }
+  };
+
+  useEffect(() => {
+    // Process destination params if navigated from Safe Zones or Directory
+    if (params.endLat && params.endLon) {
+      setEndLat(params.endLat);
+      setEndLon(params.endLon);
+      if (params.endName) {
+        setEndName(params.endName);
+      } else {
+        reverseGeocode(parseFloat(params.endLat), parseFloat(params.endLon)).then(name => setEndName(name));
+      }
+    }
+    if (params.startLat && params.startLon) {
+      setStartLat(params.startLat);
+      setStartLon(params.startLon);
+      if (params.startName) {
+        setStartName(params.startName);
+      }
+    } else {
+      // Auto-detect current location
+      handleUseCurrentLocation();
+    }
+  }, [params.endLat, params.endLon, params.endName, params.startLat, params.startLon, params.startName]);
+
+  const handlePlaceInputChange = (text: string, field: 'start' | 'end') => {
+    if (field === 'start') {
+      setStartName(text);
+    } else {
+      setEndName(text);
+    }
+    setActiveField(field);
+
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    if (!text || text.trim().length < 2) {
+      setSuggestions([]);
+      setIsSearchingPlaces(false);
+      return;
+    }
+
+    setIsSearchingPlaces(true);
+    searchDebounceTimer.current = setTimeout(async () => {
+      const uLat = parseFloat(startLat) || undefined;
+      const uLon = parseFloat(startLon) || undefined;
+      const results = await searchPlaces(text, uLat, uLon);
+      setSuggestions(results);
+      setIsSearchingPlaces(false);
+    }, 350);
+  };
+
+  const handleSelectSuggestion = (place: GeocodedPlace) => {
+    if (activeField === 'start') {
+      setStartName(place.displayName);
+      setStartLat(place.latitude.toString());
+      setStartLon(place.longitude.toString());
+    } else if (activeField === 'end') {
+      setEndName(place.displayName);
+      setEndLat(place.latitude.toString());
+      setEndLon(place.longitude.toString());
+    }
+    setSuggestions([]);
+    setActiveField(null);
+  };
+
+  const handleSwapLocations = () => {
+    const prevStartName = startName;
+    const prevStartLat = startLat;
+    const prevStartLon = startLon;
+
+    setStartName(endName);
+    setStartLat(endLat);
+    setStartLon(endLon);
+
+    setEndName(prevStartName);
+    setEndLat(prevStartLat);
+    setEndLon(prevStartLon);
+
+    setSuggestions([]);
+    setActiveField(null);
+  };
+
+  const applyPreset = (preset: (typeof PRESET_PLACES)[0]) => {
+    setStartName(preset.startName);
+    setStartLat(preset.startLat);
+    setStartLon(preset.startLon);
+    setEndName(preset.endName);
+    setEndLat(preset.endLat);
+    setEndLon(preset.endLon);
+    setSuggestions([]);
+    setActiveField(null);
+    setErrorMsg(null);
+  };
+
   const handleToggleHeatmap = async () => {
     const next = !showHeatmap;
     setShowHeatmap(next);
     if (next && heatmapSegments.length === 0) {
-      const sLat = parseFloat(startLat) || 12.9756;
-      const sLon = parseFloat(startLon) || 77.6066;
-      const eLat = parseFloat(endLat) || 12.9716;
-      const eLon = parseFloat(endLon) || 77.6074;
+      const sLat = parseFloat(startLat) || 16.3067;
+      const sLon = parseFloat(startLon) || 80.4365;
+      const eLat = parseFloat(endLat) || 16.3120;
+      const eLon = parseFloat(endLon) || 80.4420;
       const minLat = Math.max(-90, Math.min(sLat, eLat) - 0.015);
       const maxLat = Math.min(90, Math.max(sLat, eLat) + 0.015);
       const minLon = Math.max(-180, Math.min(sLon, eLon) - 0.015);
@@ -136,20 +287,48 @@ export default function RoutesScreen() {
   };
 
   const handleSearchRoutes = async () => {
-    const sLat = parseFloat(startLat);
-    const sLon = parseFloat(startLon);
-    const eLat = parseFloat(endLat);
-    const eLon = parseFloat(endLon);
-
-    if (isNaN(sLat) || isNaN(sLon) || isNaN(eLat) || isNaN(eLon)) {
-      setErrorMsg('Please enter valid numeric latitude and longitude coordinates.');
-      return;
-    }
-
     setLoading(true);
     setErrorMsg(null);
+    setSuggestions([]);
+    setActiveField(null);
+
+    let sLat = parseFloat(startLat);
+    let sLon = parseFloat(startLon);
+    let eLat = parseFloat(endLat);
+    let eLon = parseFloat(endLon);
 
     try {
+      // If user typed custom name without selecting a suggestion, geocode on the fly
+      if (isNaN(sLat) || isNaN(sLon)) {
+        const cleanName = startName.replace(/^📍\s*/, '');
+        const places = await searchPlaces(cleanName);
+        if (places.length > 0) {
+          sLat = places[0].latitude;
+          sLon = places[0].longitude;
+          setStartLat(sLat.toString());
+          setStartLon(sLon.toString());
+        } else {
+          setErrorMsg(`Could not find coordinates for origin: "${cleanName}". Please pick from suggestions.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      if (isNaN(eLat) || isNaN(eLon)) {
+        const cleanEnd = endName.replace(/^📍\s*/, '');
+        const places = await searchPlaces(cleanEnd, sLat, sLon);
+        if (places.length > 0) {
+          eLat = places[0].latitude;
+          eLon = places[0].longitude;
+          setEndLat(eLat.toString());
+          setEndLon(eLon.toString());
+        } else {
+          setErrorMsg(`Could not find coordinates for destination: "${cleanEnd}". Please pick from suggestions.`);
+          setLoading(false);
+          return;
+        }
+      }
+
       const payload = {
         startLat: sLat,
         startLon: sLon,
@@ -187,14 +366,6 @@ export default function RoutesScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const applyPreset = (preset: (typeof PRESET_LOCATIONS)[0]) => {
-    setStartLat(preset.startLat.toString());
-    setStartLon(preset.startLon.toString());
-    setEndLat(preset.endLat.toString());
-    setEndLon(preset.endLon.toString());
-    setErrorMsg(null);
   };
 
   const getSelectedRoute = (): RouteResult | null => {
@@ -247,80 +418,213 @@ export default function RoutesScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle} accessibilityRole="header">
-          Route Comparison
+          Safe Route Planning
         </Text>
         <Text style={styles.headerSubtitle}>
-          Compare travel time, distance, and predicted safety
+          Enter places by name to compare time, distance, and predicted safety
         </Text>
       </View>
 
-      {/* Inputs */}
+      {/* Place Search Card */}
       <Card style={styles.formCard}>
-        <Text style={styles.formTitle}>Coordinates</Text>
+        <View style={styles.formCardHeader}>
+          <Text style={styles.formTitle}>Where are you going?</Text>
+          <Text style={styles.formSub}>Enter place names or tap GPS for current location</Text>
+        </View>
 
-        <View style={styles.coordRow}>
-          <View style={styles.coordInput}>
-            <Input
-              label="Start Latitude"
-              value={startLat}
-              onChangeText={setStartLat}
-              keyboardType="numeric"
-              accessibilityLabel="Start latitude input"
+        {/* Origin Place Input */}
+        <View style={styles.placeInputGroup}>
+          <Text style={styles.inputGroupLabel}>Start Location</Text>
+          <View style={styles.placeInputRow}>
+            <Text style={styles.placeDot}>🟢</Text>
+            <TextInput
+              style={styles.placeTextInput}
+              placeholder="Origin address or place..."
+              placeholderTextColor="#8E8E93"
+              value={startName}
+              onChangeText={(text) => handlePlaceInputChange(text, 'start')}
+              onFocus={() => setActiveField('start')}
+              returnKeyType="search"
             />
-          </View>
-          <View style={styles.coordInput}>
-            <Input
-              label="Start Longitude"
-              value={startLon}
-              onChangeText={setStartLon}
-              keyboardType="numeric"
-              accessibilityLabel="Start longitude input"
-            />
+            {startName.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setStartName('');
+                  setSuggestions([]);
+                }}
+                style={styles.clearBtn}
+                accessibilityLabel="Clear origin"
+              >
+                <Text style={styles.clearBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.currentLocBtn}
+              onPress={handleUseCurrentLocation}
+              disabled={locatingUser}
+              accessibilityLabel="Use GPS current location"
+            >
+              {locatingUser ? (
+                <ActivityIndicator size="small" color="#007AFF" />
+              ) : (
+                <Text style={styles.currentLocBtnText}>📍 GPS</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.coordRow}>
-          <View style={styles.coordInput}>
-            <Input
-              label="Destination Latitude"
-              value={endLat}
-              onChangeText={setEndLat}
-              keyboardType="numeric"
-              accessibilityLabel="Destination latitude input"
+        {/* Swap Origin & Destination Button */}
+        <View style={styles.swapRow}>
+          <View style={styles.swapDivider} />
+          <TouchableOpacity
+            style={styles.swapButton}
+            onPress={handleSwapLocations}
+            accessibilityLabel="Swap start and destination"
+          >
+            <Text style={styles.swapButtonText}>⇅ Swap</Text>
+          </TouchableOpacity>
+          <View style={styles.swapDivider} />
+        </View>
+
+        {/* Destination Place Input */}
+        <View style={styles.placeInputGroup}>
+          <Text style={styles.inputGroupLabel}>Destination</Text>
+          <View style={styles.placeInputRow}>
+            <Text style={styles.placeDot}>🔴</Text>
+            <TextInput
+              style={styles.placeTextInput}
+              placeholder="Search destination or place..."
+              placeholderTextColor="#8E8E93"
+              value={endName}
+              onChangeText={(text) => handlePlaceInputChange(text, 'end')}
+              onFocus={() => setActiveField('end')}
+              returnKeyType="search"
             />
-          </View>
-          <View style={styles.coordInput}>
-            <Input
-              label="Destination Longitude"
-              value={endLon}
-              onChangeText={setEndLon}
-              keyboardType="numeric"
-              accessibilityLabel="Destination longitude input"
-            />
+            {endName.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setEndName('');
+                  setSuggestions([]);
+                }}
+                style={styles.clearBtn}
+                accessibilityLabel="Clear destination"
+              >
+                <Text style={styles.clearBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Presets */}
+        {/* Live Autocomplete Suggestions Overlay */}
+        {activeField !== null && (isSearchingPlaces || suggestions.length > 0) && (
+          <View style={styles.suggestionsContainer}>
+            {isSearchingPlaces && (
+              <View style={styles.searchingRow}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.searchingText}>Searching places worldwide...</Text>
+              </View>
+            )}
+            {suggestions.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.suggestionItem}
+                onPress={() => handleSelectSuggestion(item)}
+              >
+                <Text style={styles.suggestionIcon}>📍</Text>
+                <View style={styles.suggestionTextContainer}>
+                  <Text style={styles.suggestionTitle} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.suggestionSubtitle} numberOfLines={1}>
+                    {item.displayName}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Quick Presets */}
         <View style={styles.presetContainer}>
           <Text style={styles.presetLabel}>Quick Presets:</Text>
-          <View style={styles.presetButtonsRow}>
-            {PRESET_LOCATIONS.map((preset, index) => (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetButtonsRow}>
+            <TouchableOpacity
+              style={[styles.presetChip, styles.presetChipGps]}
+              onPress={handleUseCurrentLocation}
+              accessibilityLabel="Quick GPS current location"
+            >
+              <Text style={styles.presetChipGpsText}>📍 Current Location</Text>
+            </TouchableOpacity>
+            {PRESET_PLACES.map((preset, index) => (
               <TouchableOpacity
                 key={index}
                 style={styles.presetChip}
                 onPress={() => applyPreset(preset)}
                 accessibilityLabel={`Preset: ${preset.name}`}
-                accessibilityRole="button"
               >
                 <Text style={styles.presetChipText}>{preset.name}</Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
+
+        {/* Collapsible Coordinates Toggle */}
+        <TouchableOpacity
+          style={styles.coordsToggle}
+          onPress={() => setShowCoordinateDetails(!showCoordinateDetails)}
+        >
+          <Text style={styles.coordsToggleText}>
+            {showCoordinateDetails ? '▾ Hide Exact Coordinates' : '▸ Show Exact Coordinates'}
+          </Text>
+          <Text style={styles.coordsSummaryText}>
+            ({parseFloat(startLat).toFixed(4)}, {parseFloat(startLon).toFixed(4)} → {parseFloat(endLat).toFixed(4)}, {parseFloat(endLon).toFixed(4)})
+          </Text>
+        </TouchableOpacity>
+
+        {showCoordinateDetails && (
+          <View style={styles.coordsDetailBox}>
+            <View style={styles.coordRow}>
+              <View style={styles.coordInput}>
+                <Input
+                  label="Start Lat"
+                  value={startLat}
+                  onChangeText={setStartLat}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.coordInput}>
+                <Input
+                  label="Start Lon"
+                  value={startLon}
+                  onChangeText={setStartLon}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+            <View style={styles.coordRow}>
+              <View style={styles.coordInput}>
+                <Input
+                  label="End Lat"
+                  value={endLat}
+                  onChangeText={setEndLat}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.coordInput}>
+                <Input
+                  label="End Lon"
+                  value={endLon}
+                  onChangeText={setEndLon}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Active Route Preference Pill */}
         <TouchableOpacity
@@ -339,10 +643,10 @@ export default function RoutesScreen() {
         </TouchableOpacity>
 
         <Button
-          title={loading ? 'Comparing Routes...' : 'Compare Routes'}
+          title={loading ? 'Calculating Safe Routes...' : 'Find & Compare Routes'}
           onPress={handleSearchRoutes}
           disabled={loading}
-          accessibilityLabel="Compare routes button"
+          accessibilityLabel="Find safe routes button"
           accessibilityRole="button"
         />
       </Card>
@@ -1087,5 +1391,171 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignSelf: 'center',
     marginTop: 2,
+  },
+  formCardHeader: {
+    marginBottom: 12,
+  },
+  formSub: {
+    fontSize: 13,
+    color: '#636366',
+    marginTop: 2,
+  },
+  placeInputGroup: {
+    marginBottom: 8,
+  },
+  inputGroupLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#48484A',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  placeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+  },
+  placeDot: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  placeTextInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1C1C1E',
+    paddingVertical: 6,
+  },
+  clearBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  clearBtnText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '600',
+  },
+  currentLocBtn: {
+    backgroundColor: '#EBF4FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  currentLocBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  swapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  swapDivider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5EA',
+  },
+  swapButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D1D6',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginHorizontal: 10,
+  },
+  swapButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  suggestionsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1D1D6',
+    marginTop: 4,
+    marginBottom: 10,
+    maxHeight: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  searchingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    gap: 8,
+    backgroundColor: '#F8F9FA',
+  },
+  searchingText: {
+    fontSize: 13,
+    color: '#636366',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5EA',
+  },
+  suggestionIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+  },
+  suggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  suggestionSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  presetChipGps: {
+    backgroundColor: '#EBF4FF',
+    borderColor: '#007AFF',
+  },
+  presetChipGpsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  coordsToggle: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginVertical: 6,
+    paddingVertical: 4,
+  },
+  coordsToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  coordsSummaryText: {
+    fontSize: 10,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  coordsDetailBox: {
+    backgroundColor: '#F8F9FA',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
   },
 });
