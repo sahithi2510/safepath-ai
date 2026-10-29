@@ -16,6 +16,7 @@ import { Button } from '../../components/Button';
 import {
   submitReport,
   getMyReports,
+  verifyReport,
   ReportType,
   ReportStatus,
   CommunityReportResponse,
@@ -107,6 +108,26 @@ export default function ReportsScreen() {
   const [myReports, setMyReports] = useState<CommunityReportResponse[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  const handleVerify = async (reportId: string) => {
+    try {
+      setVerifyingId(reportId);
+      await verifyReport(reportId, {
+        status: 'VERIFIED',
+        verificationNote: 'Verified by safety moderator',
+      });
+      setMyReports((prev) =>
+        prev.map((r) => (r.id === reportId ? { ...r, status: 'VERIFIED' } : r))
+      );
+      Alert.alert('Report Approved', 'The safety report has been approved and is now active on the public map.');
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Unable to verify report.';
+      Alert.alert('Moderation Failed', msg);
+    } finally {
+      setVerifyingId(null);
+    }
+  };
 
   // Fetch location when user opts in
   const handleToggleLocation = async (value: boolean) => {
@@ -593,9 +614,24 @@ export default function ReportsScreen() {
                 </View>
 
                 {report.status === 'PENDING' && (
-                  <Text style={styles.pendingNotice}>
-                    ⏳ Under review by community moderators.
-                  </Text>
+                  <View style={styles.moderatorActionBox}>
+                    <Text style={styles.pendingNotice}>
+                      ⏳ Under review by community moderators.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.verifyBtn}
+                      onPress={() => handleVerify(report.id)}
+                      disabled={verifyingId === report.id}
+                      accessibilityRole="button"
+                      accessibilityLabel="Review and approve report"
+                    >
+                      {verifyingId === report.id ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.verifyBtnText}>🛡️ Review & Approve (Moderator)</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 )}
               </Card>
             ))}
@@ -644,6 +680,25 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 16,
+  },
+  moderatorActionBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  verifyBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  verifyBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   title: {
     fontSize: 24,

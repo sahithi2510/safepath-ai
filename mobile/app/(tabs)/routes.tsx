@@ -9,6 +9,8 @@ import {
   TextInput,
   Dimensions,
   Platform,
+  Linking,
+  Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -137,6 +139,123 @@ export default function RoutesScreen() {
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapSegments, setHeatmapSegments] = useState<HeatmapSegment[]>([]);
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
+
+  // Active Live Navigation Mode state
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [navUserLocation, setNavUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [navRemainingDistance, setNavRemainingDistance] = useState<number | null>(null);
+  const [navRemainingTime, setNavRemainingTime] = useState<number | null>(null);
+  const [navInstruction, setNavInstruction] = useState<string>('');
+  const locationWatchSubscription = useRef<Location.LocationSubscription | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (locationWatchSubscription.current) {
+        locationWatchSubscription.current.remove();
+        locationWatchSubscription.current = null;
+      }
+    };
+  }, []);
+
+  const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
+  const handleStartNavigation = async () => {
+    const route = getSelectedRoute();
+    if (!route || !route.coordinates || route.coordinates.length < 2) {
+      Alert.alert('Route Required', 'Please select a route with valid coordinates before starting navigation.');
+      return;
+    }
+
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required for live route navigation.');
+        return;
+      }
+
+      setIsNavigating(true);
+      setNavRemainingDistance(route.distanceMeters);
+      setNavRemainingTime(route.durationSeconds);
+      const cleanDest = endName.replace(/^📍\s*/, '') || 'Destination';
+      setNavInstruction(`Follow the ${selectedMode.toLowerCase()} path towards ${cleanDest}`);
+
+      // Start live GPS tracking
+      locationWatchSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          distanceInterval: 3,
+          timeInterval: 2000,
+        },
+        (loc) => {
+          const uLat = loc.coords.latitude;
+          const uLon = loc.coords.longitude;
+          setNavUserLocation({ latitude: uLat, longitude: uLon });
+
+          const dest = route.coordinates[route.coordinates.length - 1];
+          const dist = calculateDistanceMeters(uLat, uLon, dest.latitude, dest.longitude);
+          setNavRemainingDistance(dist);
+          // Walking speed ~1.3 m/s
+          setNavRemainingTime(Math.round(dist / 1.3));
+
+          if (dist < 25) {
+            setNavInstruction('🎉 You have arrived at your destination!');
+          } else {
+            setNavInstruction(`Continue following ${selectedMode.toLowerCase()} corridor to ${cleanDest}`);
+          }
+        }
+      );
+    } catch (err: any) {
+      Alert.alert('Navigation Error', err.message || 'Unable to start GPS navigation.');
+    }
+  };
+
+  const handleStopNavigation = () => {
+    if (locationWatchSubscription.current) {
+      locationWatchSubscription.current.remove();
+      locationWatchSubscription.current = null;
+    }
+    setIsNavigating(false);
+    setNavUserLocation(null);
+  };
+
+  const handleOpenGoogleMaps = () => {
+    const sLat = parseFloat(startLat);
+    const sLon = parseFloat(startLon);
+    const eLat = parseFloat(endLat);
+    const eLon = parseFloat(endLon);
+
+    if (isNaN(eLat) || isNaN(eLon)) {
+      Alert.alert('Destination Missing', 'Please enter a valid destination to navigate.');
+      return;
+    }
+
+    const originQuery = !isNaN(sLat) && !isNaN(sLon) ? `${sLat},${sLon}` : '';
+    const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${originQuery}&destination=${eLat},${eLon}&travelmode=walking`;
+    const nativeUri = Platform.select({
+      android: `google.navigation:q=${eLat},${eLon}&mode=w`,
+      ios: `maps://app?saddr=${originQuery}&daddr=${eLat},${eLon}&dirflg=w`,
+      default: webUrl,
+    });
+
+    Linking.canOpenURL(nativeUri).then((can) => {
+      if (can) {
+        Linking.openURL(nativeUri);
+      } else {
+        Linking.openURL(webUrl);
+      }
+    }).catch(() => {
+      Linking.openURL(webUrl);
+    });
+  };
 
   // Automatically request GPS position and reverse-geocode address
   const handleUseCurrentLocation = async () => {
@@ -826,7 +945,7 @@ export default function RoutesScreen() {
                 {loadingHeatmap
                   ? 'Loading Heatmap...'
                   : showHeatmap
-                  ? '🔥 Heatmap Overlay: ON'
+                  ? `🔥 Heatmap Overlay: ON ${heatmapSegments.length ? `(${heatmapSegments.length})` : ''}`
                   : '⚪ Heatmap Overlay: OFF'}
               </Text>
             </TouchableOpacity>
@@ -834,6 +953,64 @@ export default function RoutesScreen() {
               <Text style={styles.demoWatermarkText}>DEMO ML MODEL</Text>
             )}
           </View>
+
+          {/* Active Live Navigation HUD Card */}
+          {isNavigating && (
+            <Card style={styles.navHudCard}>
+              <View style={styles.navHudHeader}>
+                <View style={styles.navHudBadge}>
+                  <Text style={styles.navHudBadgeDot}>🟢</Text>
+                  <Text style={styles.navHudBadgeText}>LIVE SAFE GUIDANCE</Text>
+                </View>
+                <View style={[styles.navRiskPill, { backgroundColor: getRouteColor(selectedMode) }]}>
+                  <Text style={styles.navRiskPillText}>{selectedMode} PATH</Text>
+                </View>
+              </View>
+
+              <Text style={styles.navInstructionText}>
+                {navInstruction || `Proceed along ${selectedMode.toLowerCase()} route towards destination`}
+              </Text>
+
+              <View style={styles.navMetricsRow}>
+                <View style={styles.navMetricItem}>
+                  <Text style={styles.navMetricVal}>{formatDistance(navRemainingDistance)}</Text>
+                  <Text style={styles.navMetricLbl}>Remaining</Text>
+                </View>
+                <View style={styles.navMetricDivider} />
+                <View style={styles.navMetricItem}>
+                  <Text style={styles.navMetricVal}>{formatDuration(navRemainingTime)}</Text>
+                  <Text style={styles.navMetricLbl}>Est. Walking</Text>
+                </View>
+                <View style={styles.navMetricDivider} />
+                <View style={styles.navMetricItem}>
+                  <Text style={[styles.navMetricVal, { color: getRouteColor(selectedMode) }]}>
+                    {selectedRoute?.safetyScore !== null && selectedRoute?.safetyScore !== undefined
+                      ? `${Math.round(selectedRoute.safetyScore)}%`
+                      : 'Active'}
+                  </Text>
+                  <Text style={styles.navMetricLbl}>Safety Rating</Text>
+                </View>
+              </View>
+
+              <View style={styles.navBtnRow}>
+                <TouchableOpacity
+                  style={styles.navGoogleBtn}
+                  onPress={handleOpenGoogleMaps}
+                  accessibilityLabel="Open voice turn-by-turn navigation in Google Maps"
+                >
+                  <Text style={styles.navGoogleBtnText}>🧭 Google Maps Voice</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.navStopBtn}
+                  onPress={handleStopNavigation}
+                  accessibilityLabel="End current navigation"
+                >
+                  <Text style={styles.navStopBtnText}>🛑 End Guidance</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+          )}
 
           {/* Interactive Map (OpenStreetMap / CartoDB Voyager, Zero API Key Dependency) */}
           <View style={styles.mapWrapper}>
@@ -845,6 +1022,7 @@ export default function RoutesScreen() {
                 latitudeDelta: 0.02,
                 longitudeDelta: 0.02,
               }}
+              userLocation={navUserLocation}
               heatmapSegments={showHeatmap ? heatmapSegments : []}
               routes={[
                 ...(searchResponse.fastestRoute?.coordinates && searchResponse.fastestRoute.coordinates.length >= 2
@@ -965,12 +1143,35 @@ export default function RoutesScreen() {
                 </View>
               )}
 
-              <Button
-                title="Start Navigation"
-                onPress={() => alert('Navigation view will guide you along the selected route.')}
-                accessibilityLabel="Start navigation button"
-                accessibilityRole="button"
-              />
+              <View style={styles.actionButtonsContainer}>
+                {!isNavigating ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.primaryNavBtn, { backgroundColor: getRouteColor(selectedMode) }]}
+                      onPress={handleStartNavigation}
+                      accessibilityLabel="Start live navigation"
+                    >
+                      <Text style={styles.primaryNavBtnText}>🚶 Start Live Safe Navigation</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryMapsBtn}
+                      onPress={handleOpenGoogleMaps}
+                      accessibilityLabel="Open turn-by-turn navigation in Google Maps"
+                    >
+                      <Text style={styles.secondaryMapsBtnText}>🧭 Open in Google Maps (Spoken Voice)</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.stopNavBtn}
+                    onPress={handleStopNavigation}
+                    accessibilityLabel="Stop active navigation"
+                  >
+                    <Text style={styles.stopNavBtnText}>🛑 Stop Live Navigation</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </Card>
           )}
         </View>
@@ -1557,5 +1758,166 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     marginBottom: 8,
+  },
+  // Navigation HUD & Actions
+  navHudCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#34C759',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  navHudHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  navHudBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(52, 199, 89, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  navHudBadgeDot: {
+    fontSize: 10,
+    marginRight: 5,
+  },
+  navHudBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#34C759',
+    letterSpacing: 0.5,
+  },
+  navRiskPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  navRiskPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  navInstructionText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    lineHeight: 22,
+  },
+  navMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#2C2C2E',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    marginBottom: 12,
+  },
+  navMetricItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  navMetricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#48484A',
+  },
+  navMetricVal: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  navMetricLbl: {
+    fontSize: 11,
+    color: '#AEAEB2',
+    marginTop: 2,
+  },
+  navBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  navGoogleBtn: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navGoogleBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  navStopBtn: {
+    flex: 1,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navStopBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  actionButtonsContainer: {
+    marginTop: 12,
+    gap: 10,
+  },
+  primaryNavBtn: {
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  primaryNavBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  secondaryMapsBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryMapsBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  stopNavBtn: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopNavBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

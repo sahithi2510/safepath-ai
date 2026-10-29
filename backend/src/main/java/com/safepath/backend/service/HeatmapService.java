@@ -69,18 +69,7 @@ public class HeatmapService {
         String bboxStr = String.format("[%.4f, %.4f, %.4f, %.4f]", minLat, minLon, maxLat, maxLon);
 
         if (segments == null || segments.isEmpty()) {
-            return HeatmapDto.Response.builder()
-                    .boundingBox(bboxStr)
-                    .totalSegments(0)
-                    .scoredSegments(0)
-                    .unscoredSegments(0)
-                    .segments(Collections.emptyList())
-                    .mlServiceAvailable(true)
-                    .isSyntheticDemonstration(null)
-                    .modelVersion(null)
-                    .timestamp(OffsetDateTime.now())
-                    .disclaimer(HEATMAP_DISCLAIMER)
-                    .build();
+            return generateDemoHeatmapCorridors(minLat, minLon, maxLat, maxLon, bboxStr);
         }
 
         // Fetch ML risk predictions for segments in batch
@@ -252,5 +241,120 @@ public class HeatmapService {
             default:
                 return "#8E8E93"; // Slate Gray
         }
+    }
+
+    /**
+     * Generates synthetic demonstration safety corridors across unseeded viewports
+     * in accordance with AGENTS.md §2.5 (clearly labeled DEMO DATA).
+     */
+    public HeatmapDto.Response generateDemoHeatmapCorridors(
+            Double minLat, Double minLon, Double maxLat, Double maxLon, String bboxStr) {
+
+        List<HeatmapDto.SegmentRisk> demoSegments = new ArrayList<>();
+        double latSpan = maxLat - minLat;
+        double lonSpan = maxLon - minLon;
+
+        // 4 Horizontal corridors (West to East)
+        for (int i = 1; i <= 4; i++) {
+            double cLat = minLat + i * (latSpan / 5.0);
+            double startLon = minLon + 0.1 * lonSpan;
+            double midLon = minLon + 0.5 * lonSpan;
+            double endLon = minLon + 0.9 * lonSpan;
+
+            double risk = (i % 2 == 0) ? 0.15 : (i == 1 ? 0.35 : 0.65);
+            double safety = Math.round((1.0 - risk) * 1000.0) / 10.0;
+            String riskLevel = deriveRiskCategory(1.0 - risk);
+            String colorHex = mapRiskToColor(riskLevel);
+
+            List<RouteDto.CoordinateDto> coords = List.of(
+                    RouteDto.CoordinateDto.builder().latitude(cLat).longitude(startLon).build(),
+                    RouteDto.CoordinateDto.builder().latitude(cLat).longitude(midLon).build(),
+                    RouteDto.CoordinateDto.builder().latitude(cLat).longitude(endLon).build()
+            );
+
+            Map<String, Object> geoJson = new HashMap<>();
+            geoJson.put("type", "LineString");
+            geoJson.put("coordinates", List.of(
+                    List.of(startLon, cLat),
+                    List.of(midLon, cLat),
+                    List.of(endLon, cLat)
+            ));
+
+            demoSegments.add(HeatmapDto.SegmentRisk.builder()
+                    .segmentId("DEMO-H-" + i)
+                    .roadName("Cross Corridor " + i + " (DEMO)")
+                    .roadType(i == 2 ? "primary" : "secondary")
+                    .lengthMeters((double) Math.round(lonSpan * 111320.0 * 0.8))
+                    .isLit(i <= 2)
+                    .geometry(geoJson)
+                    .coordinates(coords)
+                    .riskScore(risk)
+                    .safetyScore(safety)
+                    .riskLevel(riskLevel)
+                    .scoringStatus("SCORED")
+                    .colorHex(colorHex)
+                    .isSyntheticDemonstration(true)
+                    .modelVersion("1.0.0-demo")
+                    .notes("DEMO DATA — Synthetic demonstration safety corridor for unseeded region (AGENTS.md §2.5)")
+                    .build());
+        }
+
+        // 4 Vertical corridors (South to North)
+        for (int j = 1; j <= 4; j++) {
+            double cLon = minLon + j * (lonSpan / 5.0);
+            double startLat = minLat + 0.1 * latSpan;
+            double midLat = minLat + 0.5 * latSpan;
+            double endLat = minLat + 0.9 * latSpan;
+
+            double risk = (j == 1 ? 0.12 : (j == 2 ? 0.48 : (j == 3 ? 0.78 : 0.22)));
+            double safety = Math.round((1.0 - risk) * 1000.0) / 10.0;
+            String riskLevel = deriveRiskCategory(1.0 - risk);
+            String colorHex = mapRiskToColor(riskLevel);
+
+            List<RouteDto.CoordinateDto> coords = List.of(
+                    RouteDto.CoordinateDto.builder().latitude(startLat).longitude(cLon).build(),
+                    RouteDto.CoordinateDto.builder().latitude(midLat).longitude(cLon).build(),
+                    RouteDto.CoordinateDto.builder().latitude(endLat).longitude(cLon).build()
+            );
+
+            Map<String, Object> geoJson = new HashMap<>();
+            geoJson.put("type", "LineString");
+            geoJson.put("coordinates", List.of(
+                    List.of(cLon, startLat),
+                    List.of(cLon, midLat),
+                    List.of(cLon, endLat)
+            ));
+
+            demoSegments.add(HeatmapDto.SegmentRisk.builder()
+                    .segmentId("DEMO-V-" + j)
+                    .roadName("Avenue Corridor " + j + " (DEMO)")
+                    .roadType(j == 1 ? "primary" : "residential")
+                    .lengthMeters((double) Math.round(latSpan * 111320.0 * 0.8))
+                    .isLit(j % 2 != 0)
+                    .geometry(geoJson)
+                    .coordinates(coords)
+                    .riskScore(risk)
+                    .safetyScore(safety)
+                    .riskLevel(riskLevel)
+                    .scoringStatus("SCORED")
+                    .colorHex(colorHex)
+                    .isSyntheticDemonstration(true)
+                    .modelVersion("1.0.0-demo")
+                    .notes("DEMO DATA — Synthetic demonstration safety corridor for unseeded region (AGENTS.md §2.5)")
+                    .build());
+        }
+
+        return HeatmapDto.Response.builder()
+                .boundingBox(bboxStr)
+                .totalSegments(demoSegments.size())
+                .scoredSegments(demoSegments.size())
+                .unscoredSegments(0)
+                .segments(demoSegments)
+                .mlServiceAvailable(true)
+                .isSyntheticDemonstration(true)
+                .modelVersion("1.0.0-demo")
+                .timestamp(OffsetDateTime.now())
+                .disclaimer(HEATMAP_DISCLAIMER)
+                .build();
     }
 }

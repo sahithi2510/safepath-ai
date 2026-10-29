@@ -9,8 +9,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Safe zone service — provides nearby and bounding-box safe zone lookup using PostGIS.
@@ -71,7 +79,14 @@ public class SafeZoneService {
         }
 
         if (zones == null || zones.isEmpty()) {
-            return Collections.emptyList();
+            double deg = clampedRadius / 111320.0;
+            List<SafeZoneDto> osmZones = fetchFromOsmNominatim(lat - deg, lon - deg, lat + deg, lon + deg, normalizedTypes, clampedLimit);
+            for (SafeZoneDto d : osmZones) {
+                if (d.getLatitude() != null && d.getLongitude() != null) {
+                    d.setDistanceMeters(calculateHaversineDistanceMeters(lat, lon, d.getLatitude(), d.getLongitude()));
+                }
+            }
+            return osmZones;
         }
 
         return zones.stream()
@@ -113,12 +128,167 @@ public class SafeZoneService {
         }
 
         if (zones == null || zones.isEmpty()) {
-            return Collections.emptyList();
+            return fetchFromOsmNominatim(minLat, minLon, maxLat, maxLon, normalizedTypes, effectiveLimit);
         }
 
         return zones.stream()
                 .map(zone -> toDto(zone, null))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Fallback to query OpenStreetMap Nominatim for real public facilities
+     * (hospitals, police stations, pharmacies) within the bounding box.
+     */
+    public List<SafeZoneDto> fetchFromOsmNominatim(
+            Double minLat, Double minLon, Double maxLat, Double maxLon,
+            List<String> types, int limit) {
+
+        List<SafeZoneDto> results = new ArrayList<>();
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(4))
+                .build();
+        ObjectMapper mapper = new ObjectMapper();
+
+        String[] queryTypes = (types != null && !types.isEmpty())
+                ? types.toArray(new String[0])
+                : new String[]{"hospital", "police", "pharmacy"};
+
+        for (String qType : queryTypes) {
+            if (results.size() >= limit) break;
+            String searchWord = "hospital";
+            SafeZone.ZoneType targetType = SafeZone.ZoneType.HOSPITAL;
+            if (qType.contains("POLICE")) {
+                searchWord = "police";
+                targetType = SafeZone.ZoneType.POLICE_STATION;
+            } else if (qType.contains("PHARMACY")) {
+                searchWord = "pharmacy";
+                targetType = SafeZone.ZoneType.PHARMACY;
+            } else if (qType.contains("TRANSPORT")) {
+                searchWord = "station";
+                targetType = SafeZone.ZoneType.PUBLIC_TRANSPORT;
+            }
+
+            try {
+                String url = String.format(Locale.US,
+                        "https://nominatim.openstreetmap.org/search?q=%s&viewbox=%f,%f,%f,%f&bounded=1&format=json&limit=4",
+                        searchWord, minLon, maxLat, maxLon, minLat);
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("User-Agent", "SafePathAI/1.0 (academic-project)")
+                        .timeout(Duration.ofSeconds(4))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    JsonNode arrayNode = mapper.readTree(resp.body());
+                    if (arrayNode.isArray()) {
+                        for (JsonNode item : arrayNode) {
+                            if (results.size() >= limit) break;
+                            double itemLat = item.path("lat").asDouble();
+                            double itemLon = item.path("lon").asDouble();
+                            String name = item.path("name").asText();
+                            String displayName = item.path("display_name").asText();
+                            if (name == null || name.isBlank()) {
+                                name = displayName.split(",")[0].trim();
+                            }
+                            if (name.isBlank()) {
+                                name = targetType.name().replace('_', ' ');
+                            }
+
+                            SafeZoneDto dto = SafeZoneDto.builder()
+                                    .id(UUID.randomUUID())
+                                    .name(name)
+                                    .zoneType(targetType)
+                                    .verificationStatus(SafeZone.VerificationStatus.UNVERIFIED)
+                                    .latitude(itemLat)
+                                    .longitude(itemLon)
+                                    .address(displayName)
+                                    .operatingHours(targetType == SafeZone.ZoneType.POLICE_STATION || targetType == SafeZone.ZoneType.HOSPITAL ? "24 Hours" : "08:00 - 22:00")
+                                    .is24h(targetType == SafeZone.ZoneType.POLICE_STATION || targetType == SafeZone.ZoneType.HOSPITAL)
+                                    .source("OPENSTREETMAP")
+                                    .createdAt(OffsetDateTime.now())
+                                    .updatedAt(OffsetDateTime.now())
+                                    .disclaimer(SAFE_ZONE_DISCLAIMER)
+                                    .build();
+
+                            results.add(dto);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("OSM Nominatim facility query failed for {}: {}", qType, e.getMessage());
+            }
+        }
+
+        if (results.isEmpty()) {
+            return generateDemoSafeZones(minLat, minLon, maxLat, maxLon);
+        }
+
+        return results;
+    }
+
+    /**
+     * Fallback to synthetic demonstration facilities across viewport if OSM query is empty or offline.
+     */
+    public List<SafeZoneDto> generateDemoSafeZones(Double minLat, Double minLon, Double maxLat, Double maxLon) {
+        List<SafeZoneDto> demoList = new ArrayList<>();
+        double midLat = (minLat + maxLat) / 2.0;
+        double midLon = (minLon + maxLon) / 2.0;
+        double latSpan = (maxLat - minLat);
+        double lonSpan = (maxLon - minLon);
+
+        demoList.add(SafeZoneDto.builder()
+                .id(UUID.randomUUID())
+                .name("Civic Police Station (DEMO)")
+                .zoneType(SafeZone.ZoneType.POLICE_STATION)
+                .verificationStatus(SafeZone.VerificationStatus.UNVERIFIED)
+                .latitude(midLat + latSpan * 0.25)
+                .longitude(midLon - lonSpan * 0.25)
+                .address("Public Safety Corridor (DEMO)")
+                .operatingHours("24 Hours")
+                .is24h(true)
+                .source("DEMO DATA")
+                .disclaimer(SAFE_ZONE_DISCLAIMER)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        demoList.add(SafeZoneDto.builder()
+                .id(UUID.randomUUID())
+                .name("General Community Hospital (DEMO)")
+                .zoneType(SafeZone.ZoneType.HOSPITAL)
+                .verificationStatus(SafeZone.VerificationStatus.UNVERIFIED)
+                .latitude(midLat - latSpan * 0.2)
+                .longitude(midLon + lonSpan * 0.2)
+                .address("Medical Aid Boulevard (DEMO)")
+                .operatingHours("24 Hours Emergency")
+                .is24h(true)
+                .source("DEMO DATA")
+                .disclaimer(SAFE_ZONE_DISCLAIMER)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        demoList.add(SafeZoneDto.builder()
+                .id(UUID.randomUUID())
+                .name("24x7 Care Pharmacy (DEMO)")
+                .zoneType(SafeZone.ZoneType.PHARMACY)
+                .verificationStatus(SafeZone.VerificationStatus.UNVERIFIED)
+                .latitude(midLat + latSpan * 0.1)
+                .longitude(midLon + lonSpan * 0.3)
+                .address("Commercial Hub Road (DEMO)")
+                .operatingHours("24 Hours")
+                .is24h(true)
+                .source("DEMO DATA")
+                .disclaimer(SAFE_ZONE_DISCLAIMER)
+                .createdAt(OffsetDateTime.now())
+                .updatedAt(OffsetDateTime.now())
+                .build());
+
+        return demoList;
     }
 
     /**

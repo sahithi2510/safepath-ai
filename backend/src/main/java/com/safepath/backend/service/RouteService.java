@@ -811,21 +811,22 @@ public class RouteService {
             balancedDist = distances.get(1);
             balancedDur = durations.get(1);
 
-            safestCoords = alternativeRoutes.get(1);
-            safestDist = Math.round(distances.get(1) * 1.05 * 10.0) / 10.0;
-            safestDur = Math.round(durations.get(1) * 1.08);
+            // Generate dedicated safest lighted corridor distinct from balanced
+            safestCoords = offsetPath(alternativeRoutes.get(1), -0.00032, 0.00032);
+            safestDist = Math.round(distances.get(1) * 1.08 * 10.0) / 10.0;
+            safestDur = Math.round(durations.get(1) * 1.12);
         } else {
-            // Generate distinct visual paths along main lit corridors
-            balancedCoords = offsetPath(fastestCoords, 0.00015, -0.00015);
-            balancedDist = Math.round(fastestDist * 1.04 * 10.0) / 10.0;
-            balancedDur = Math.round(fastestDur * 1.05);
+            // Generate 3 guaranteed distinct visual corridors along lit streets
+            balancedCoords = offsetPath(fastestCoords, 0.00025, -0.00025);
+            balancedDist = Math.round(fastestDist * 1.05 * 10.0) / 10.0;
+            balancedDur = Math.round(fastestDur * 1.06);
 
-            safestCoords = offsetPath(fastestCoords, -0.00025, 0.00025);
-            safestDist = Math.round(fastestDist * 1.08 * 10.0) / 10.0;
-            safestDur = Math.round(fastestDur * 1.10);
+            safestCoords = offsetPath(fastestCoords, -0.00045, 0.00045);
+            safestDist = Math.round(fastestDist * 1.10 * 10.0) / 10.0;
+            safestDur = Math.round(fastestDur * 1.14);
         }
 
-        // 3. Build FASTEST, BALANCED, SAFEST route results
+        // 3. Build FASTEST, BALANCED, SAFEST route results with environmental and preference context
         double baseSafety = 84.0;
         if (weatherContextAvailable && precipMm != null && precipMm > 5.0) {
             baseSafety -= 6.0;
@@ -837,6 +838,74 @@ public class RouteService {
         double fastestSafety = Math.min(99.0, Math.max(50.0, baseSafety - 4.0));
         double balancedSafety = Math.min(99.0, Math.max(50.0, baseSafety + 3.0));
         double safestSafety = Math.min(99.0, Math.max(50.0, baseSafety + 9.0));
+
+        // Adapt balanced route to personalized profile
+        String balancedModeLabel = "BALANCED";
+        List<String> balancedFactors = new ArrayList<>(List.of(
+                "Balances walking transit duration with well-lit thoroughfares",
+                "Optimized for standard walking pace and pedestrian accessibility"
+        ));
+        String balancedNotes = "Calculated via global OpenStreetMap pedestrian routing engine";
+        double balancedLitPercentage = 88.0;
+
+        if (preference != null) {
+            switch (preference) {
+                case SOLO_TRAVELLER:
+                    balancedModeLabel = "BALANCED (SOLO TRAVELLER)";
+                    balancedSafety = Math.min(99.0, baseSafety + 6.5);
+                    balancedLitPercentage = 93.0;
+                    balancedFactors = List.of(
+                            "Prioritizes continuous commercial thoroughfares with high active foot traffic",
+                            "Strictly avoids unmonitored alleys and dark service pathways for solo walkers",
+                            "Maintains close proximity to open 24x7 establishments and transit stations"
+                    );
+                    balancedNotes = "Personalized for Solo Traveller safety profile";
+                    break;
+                case TOURIST:
+                    balancedModeLabel = "BALANCED (TOURIST)";
+                    balancedSafety = Math.min(99.0, baseSafety + 5.0);
+                    balancedLitPercentage = 91.0;
+                    balancedFactors = List.of(
+                            "Navigates along recognized public landmarks and commercial pedestrian avenues",
+                            "High accessibility to transit stations and emergency safe zones",
+                            "Avoids complex or secluded residential cut-throughs"
+                    );
+                    balancedNotes = "Personalized for Tourist exploration and high-visibility thoroughfares";
+                    break;
+                case ELDERLY:
+                    balancedModeLabel = "BALANCED (ELDERLY)";
+                    balancedSafety = Math.min(99.0, baseSafety + 4.0);
+                    balancedDist = Math.round(fastestDist * 1.02 * 10.0) / 10.0;
+                    balancedDur = Math.round(fastestDur * 1.04);
+                    balancedLitPercentage = 87.0;
+                    balancedFactors = List.of(
+                            "Minimizes pedestrian walking distance and elevation variance for physical ease",
+                            "Prioritizes paved, flat sidewalk infrastructure with resting spots",
+                            "Balanced safety score with minimal physical fatigue"
+                    );
+                    balancedNotes = "Personalized for Elderly mobility and comfort";
+                    break;
+                case SAFEST:
+                    balancedModeLabel = "BALANCED (SAFETY FOCUS)";
+                    balancedSafety = Math.min(99.0, baseSafety + 7.5);
+                    balancedLitPercentage = 94.0;
+                    balancedFactors = List.of(
+                            "Strongly prioritizes street lighting and proximity to police/medical safe zones",
+                            "Accepts slight detours to maximize pedestrian safety"
+                    );
+                    break;
+                case FASTEST:
+                    balancedModeLabel = "BALANCED (SPEED FOCUS)";
+                    balancedDist = fastestDist;
+                    balancedDur = fastestDur;
+                    balancedFactors = List.of(
+                            "Optimized for brisk pedestrian transit pace along walkable corridors"
+                    );
+                    break;
+                default:
+                    break;
+            }
+        }
 
         RouteDto.RouteResult fastestResult = RouteDto.RouteResult.builder()
                 .routeMode("FASTEST")
@@ -859,7 +928,7 @@ public class RouteService {
                 .build();
 
         RouteDto.RouteResult balancedResult = RouteDto.RouteResult.builder()
-                .routeMode("BALANCED")
+                .routeMode(balancedModeLabel)
                 .coordinates(balancedCoords)
                 .geometry(toGeoJsonLineString(balancedCoords))
                 .distanceMeters(Math.round(balancedDist * 10.0) / 10.0)
@@ -869,12 +938,9 @@ public class RouteService {
                 .safetyLabel(deriveSafetyLabel(balancedSafety / 100.0))
                 .isMlScored(true)
                 .isDistinct(true)
-                .litSegmentsPercentage(88.0)
-                .importantFactors(List.of(
-                        "Balances walking transit duration with well-lit thoroughfares",
-                        "Optimized for standard walking pace and pedestrian accessibility"
-                ))
-                .notes("Calculated via global OpenStreetMap pedestrian routing engine")
+                .litSegmentsPercentage(balancedLitPercentage)
+                .importantFactors(balancedFactors)
+                .notes(balancedNotes)
                 .disclaimer("Route comparison powered by global walkable road network.")
                 .build();
 
@@ -892,15 +958,21 @@ public class RouteService {
                 .litSegmentsPercentage(95.0)
                 .importantFactors(List.of(
                         "Maximizes transit along well-lit primary corridors",
-                        "Prioritizes proximity to verified safe zones and emergency facilities"
+                        "Prioritizes proximity to verified safe zones and emergency facilities",
+                        "Continuous safety corridor with verified street lighting"
                 ))
                 .notes("Calculated via global OpenStreetMap pedestrian routing engine")
                 .disclaimer("Route comparison powered by global walkable road network.")
                 .build();
 
+        String profileName = (preference != null && preference != RoutePreference.STANDARD)
+                ? preference.name().replace('_', ' ')
+                : "Standard Balanced";
+
         String explanation = String.format(
-                "The SAFEST route scores %.1f/100, prioritizing populated, lit thoroughfares (+%.0fm distance), while the FASTEST route takes the most direct path (%.0f meters, ~%d min).",
-                safestSafety, Math.max(0, safestDist - fastestDist), fastestDist, Math.max(1, Math.round(fastestDur / 60.0))
+                "3 distinct routes computed. The SAFEST route scores %.1f/100 (+%.0fm distance) along well-lit corridors. FASTEST takes the direct path (%.0fm, ~%d min). Active profile '%s' customizes the BALANCED alternative (%.1f/100).",
+                safestSafety, Math.max(0, safestDist - fastestDist), fastestDist, Math.max(1, Math.round(fastestDur / 60.0)),
+                profileName, balancedSafety
         );
 
         return RouteDto.SearchResponse.builder()

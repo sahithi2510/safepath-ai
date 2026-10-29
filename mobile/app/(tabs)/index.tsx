@@ -311,7 +311,9 @@ export default function MapScreen() {
                 heatmapEnabled ? styles.controlBtnTextActive : styles.controlBtnTextInactive,
               ]}
             >
-              {heatmapEnabled ? '🔥 Heatmap: ON' : '⚪ Heatmap: OFF'}
+              {heatmapEnabled
+                ? `🔥 Heatmap: ON ${heatmapData?.segments?.length ? `(${heatmapData.segments.length})` : ''}`
+                : '⚪ Heatmap: OFF'}
             </Text>
           </TouchableOpacity>
 
@@ -337,7 +339,9 @@ export default function MapScreen() {
                 safeZonesEnabled ? styles.safeZonesBtnTextActive : styles.controlBtnTextInactive,
               ]}
             >
-              {safeZonesEnabled ? '🛡️ Safe Zones: ON' : '⚪ Safe Zones: OFF'}
+              {safeZonesEnabled
+                ? `🛡️ Safe Zones: ON ${safeZones?.length ? `(${safeZones.length})` : ''}`
+                : '⚪ Safe Zones: OFF'}
             </Text>
           </TouchableOpacity>
 

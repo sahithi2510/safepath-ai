@@ -90,17 +90,13 @@ export default function EmergencyScreen() {
           style: 'default',
           onPress: async () => {
             try {
-              const supported = await Linking.canOpenURL(url);
-              if (supported) {
-                await Linking.openURL(url);
-              } else {
-                Alert.alert(
-                  'Dialer Unavailable',
-                  `Your device cannot open the phone dialer directly. Please manually call ${phoneNumber}.`
-                );
-              }
-            } catch (e) {
-              Alert.alert('Error', `Failed to open phone dialer for ${phoneNumber}.`);
+              // Direct invocation bypasses Android 11+ package visibility query filter
+              await Linking.openURL(url);
+            } catch (err: any) {
+              Alert.alert(
+                'Dialer Notice',
+                `Could not launch phone dialer automatically. Please manually call ${phoneNumber}.`
+              );
             }
           },
         },
@@ -121,17 +117,12 @@ export default function EmergencyScreen() {
     const url = `sms:${cleanNumber}${separator}body=${encodeURIComponent(message)}`;
 
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert(
-          'SMS Unavailable',
-          `Cannot open SMS app directly. Please manually message ${contact.name} at ${contact.phoneNumber}.`
-        );
-      }
+      await Linking.openURL(url);
     } catch (e) {
-      Alert.alert('Error', `Failed to open SMS app for ${contact.phoneNumber}.`);
+      Alert.alert(
+        'SMS Notice',
+        `Could not open SMS app directly. Please manually message ${contact.name} at ${contact.phoneNumber}.`
+      );
     }
   };
 

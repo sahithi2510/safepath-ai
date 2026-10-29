@@ -89,3 +89,16 @@ export const getNearbyReports = async (
   });
   return response.data;
 };
+
+export interface VerifyReportRequest {
+  status: 'VERIFIED' | 'REJECTED';
+  verificationNote?: string;
+}
+
+export const verifyReport = async (
+  id: string,
+  request: VerifyReportRequest
+): Promise<CommunityReportResponse> => {
+  const response = await api.put<CommunityReportResponse>(`/reports/${id}/verify`, request);
+  return response.data;
+};

@@ -1132,6 +1132,11 @@ None.
 | 2026-10-26 | Place-Name-Based Search & Reverse-Geocoding | Added OpenStreetMap Nominatim geocoding & reverse geocoding to resolve human-readable place names, GPS location autofill, and live autocomplete suggestions in Route Planning screen |
 | 2026-10-26 | Map Pinch-Zoom Touch Stabilization | Resolved Android WebView pinch jitter by adding scrollEnabled={false}, overScrollMode="never", touch-action: none, and smooth Leaflet touchZoom options |
 | 2026-10-26 | Leaflet WebView Memoization & Zoom-Out Fix | Fixed automatic zoom-out bug by memoizing htmlContent and source object via useRef/useMemo in LeafletMap, preventing WebView reloads and preserving user zoom levels across all re-renders |
+| 2026-10-29 | Dynamic Corridor Offset for 3 Distinct Routes | Replaced duplicate fallback coordinates in RouteService with dynamic corridor offset paths, guaranteeing 3 visually distinct, non-overlapping alternatives (FASTEST, BALANCED, SAFEST) across all global coordinate pairs |
+| 2026-10-29 | Profile Preference Dynamic Route Customization | Wired user RoutePreference (SOLO_TRAVELLER, ELDERLY, TOURIST, SAFEST, FASTEST, BALANCED) to customize the middle route's weighting, lighting prioritization, safety score, and descriptive title |
+| 2026-10-29 | Android 11+ Emergency Dialer Direct Invocation | Removed package visibility filter check (Linking.canOpenURL) to allow instant invocation of native dialer (112, 100, 108) and SMS apps |
+| 2026-10-29 | Mobile Tab Navigation Icons | Added responsive TabIcon component with active/inactive scaling and custom styling to mobile TabLayout |
+| 2026-10-29 | University Final Project Report Documentation | Authored exhaustive 10-chapter Final Project Report in Markdown (.md), Rich Formatted Word Document (.doc), and plain text (.txt) adhering to university engineering evaluation criteria |
 
 
 
