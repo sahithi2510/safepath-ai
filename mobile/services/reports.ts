@@ -40,9 +40,17 @@ export interface CommunityReportResponse {
   longitude?: number | null;
   locationPrecision?: LocationPrecision;
   status: ReportStatus;
+  verificationNote?: string | null;
+  verifiedAt?: string | null;
   incidentDatetime?: string | null;
   createdAt: string;
   distanceMeters?: number | null;
+}
+
+export interface ReportStats {
+  pending: number;
+  verified: number;
+  rejected: number;
 }
 
 export interface PaginatedReportsResponse {
@@ -72,6 +80,27 @@ export const getMyReports = async (
   const response = await api.get<PaginatedReportsResponse>('/reports/my', {
     params: { page, size },
   });
+  return response.data;
+};
+
+/**
+ * Fetch all PENDING reports awaiting moderation (MODERATOR or ADMIN only).
+ */
+export const getPendingReports = async (
+  page: number = 0,
+  size: number = 50
+): Promise<PaginatedReportsResponse> => {
+  const response = await api.get<PaginatedReportsResponse>('/reports/pending', {
+    params: { page, size },
+  });
+  return response.data;
+};
+
+/**
+ * Fetch report stats count (MODERATOR or ADMIN only).
+ */
+export const getReportStats = async (): Promise<ReportStats> => {
+  const response = await api.get<ReportStats>('/reports/stats');
   return response.data;
 };
 

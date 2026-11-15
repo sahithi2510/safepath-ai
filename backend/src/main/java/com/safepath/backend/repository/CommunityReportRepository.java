@@ -21,6 +21,9 @@ public interface CommunityReportRepository extends JpaRepository<CommunityReport
     /** Get reports by a specific user (all statuses). */
     Page<CommunityReport> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    /** Get reports filtered by status (e.g. PENDING for moderators). */
+    Page<CommunityReport> findByStatusOrderByCreatedAtDesc(CommunityReport.ReportStatus status, Pageable pageable);
+
     /**
      * Find VERIFIED reports near a location within a given radius.
      *

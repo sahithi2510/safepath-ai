@@ -2,6 +2,7 @@ package com.safepath.backend.service;
 
 import com.safepath.backend.dto.UpdateProfileRequest;
 import com.safepath.backend.dto.UserProfileDto;
+import com.safepath.backend.entity.Role;
 import com.safepath.backend.entity.User;
 import com.safepath.backend.exception.ResourceNotFoundException;
 import com.safepath.backend.repository.UserRepository;
@@ -9,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.stream.Collectors;
 
 /**
  * User profile service — handles profile retrieval and updates.
@@ -57,6 +60,9 @@ public class UserService {
                 .fullName(user.getFullName())
                 .phoneNumber(user.getPhoneNumber())
                 .routePreference(user.getRoutePreference())
+                .roles(user.getRoles() != null
+                        ? user.getRoles().stream().map(r -> r.getName().name()).collect(Collectors.toSet())
+                        : java.util.Collections.emptySet())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

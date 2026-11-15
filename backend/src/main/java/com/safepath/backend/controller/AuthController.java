@@ -4,6 +4,7 @@ import com.safepath.backend.dto.AuthResponse;
 import com.safepath.backend.dto.LoginRequest;
 import com.safepath.backend.dto.RegisterRequest;
 import com.safepath.backend.dto.UserProfileDto;
+import com.safepath.backend.entity.Role;
 import com.safepath.backend.entity.User;
 import com.safepath.backend.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,9 @@ public class AuthController {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .routePreference(user.getRoutePreference())
+                .roles(user.getRoles() != null
+                        ? user.getRoles().stream().map(r -> r.getName().name()).collect(java.util.stream.Collectors.toSet())
+                        : java.util.Collections.emptySet())
                 .createdAt(user.getCreatedAt())
                 .build();
         return ResponseEntity.status(HttpStatus.CREATED).body(response);

@@ -1139,6 +1139,7 @@ None.
 | 2026-10-29 | University Final Project Report Documentation | Authored exhaustive 10-chapter Final Project Report in Markdown (.md), Rich Formatted Word Document (.doc), and plain text (.txt) adhering to university engineering evaluation criteria |
 | 2026-11-15 | 1500-Sample Urban Safety Model Retraining & Demo Watermark Remediation | Generated calibrated 1,500-sample urban safety training dataset across 5 zone archetypes; retrained production XGBoost (accuracy 95.1%, ROC-AUC 0.985) and Random Forest (accuracy 90.2%); purged hardcoded "DEMO ML MODEL" watermark in favor of dynamic "🤖 AI RISK MODEL ACTIVE" status banner |
 | 2026-11-15 | Map & Routing Improvements: Step-by-Step Directions, GPS Recenter FAB & Hazard Detour Preview | Added expandable step-by-step pedestrian guidance with bearing maneuvers and street illumination badges; added floating GPS recenter action buttons on Map and Routes screens; added Before vs After hazard impact simulation in Routes and Reports screens |
+| 2026-11-15 | Reports Section: Admin/Moderator Dashboard, In-App Status Alerts & Route Detour Impact | Built dedicated Moderator Dashboard (`moderator-dashboard.tsx`) with KPI cards, category filters, and one-click approve/reject actions; added V18 database migration for user notifications; automated in-app notifications to reporters upon verification/rejection; integrated live route detour metrics & routes map shortcut into community reports |
 
 
 

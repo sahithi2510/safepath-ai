@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.OffsetDateTime;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -18,6 +19,7 @@ public class UserProfileDto {
     private String fullName;
     private String phoneNumber;
     private RoutePreference routePreference;
+    private Set<String> roles;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;
 }

@@ -62,6 +62,20 @@ public class CommunityReportController {
         return ResponseEntity.ok(reportService.getMyReports(userDetails, pageable));
     }
 
+    @Operation(summary = "List all PENDING reports awaiting moderation (MODERATOR/ADMIN only)")
+    @GetMapping("/pending")
+    @PreAuthorize("hasRole('MODERATOR') or hasRole('ADMIN')")
+    public ResponseEntity<Page<CommunityReportDto.Response>> getPendingReports(Pageable pageable) {
+        return ResponseEntity.ok(reportService.getPendingReports(pageable));
+    }
+
+    @Operation(summary = "Get report volume statistics (MODERATOR/ADMIN only)")
+    @GetMapping("/stats")
+    @PreAuthorize("hasRole('MODERATOR') or hasRole('ADMIN')")
+    public ResponseEntity<java.util.Map<String, Long>> getReportStats() {
+        return ResponseEntity.ok(reportService.getReportStatistics());
+    }
+
     @Operation(summary = "Verify or reject a report (MODERATOR/ADMIN only)")
     @PutMapping("/{id}/verify")
     @PreAuthorize("hasRole('MODERATOR') or hasRole('ADMIN')")

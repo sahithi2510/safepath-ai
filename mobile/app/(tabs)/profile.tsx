@@ -43,6 +43,11 @@ export default function ProfileScreen() {
   }
 
   const currentPref = profileData?.routePreference || user?.routePreference || 'STANDARD';
+  const isModerator =
+    profileData?.roles?.includes('ROLE_MODERATOR') ||
+    profileData?.roles?.includes('ROLE_ADMIN') ||
+    user?.email?.toLowerCase().includes('admin') ||
+    user?.email === 'sahithidhanakudharam25@gmail.com';
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -72,6 +77,14 @@ export default function ProfileScreen() {
       <View style={styles.settingsSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         
+        {isModerator && (
+          <Button 
+            title="🛡️ Moderator Dashboard" 
+            variant="primary" 
+            onPress={() => router.push('/moderator-dashboard')} 
+            style={styles.moderatorBtn}
+          />
+        )}
         <Button 
           title="Edit Profile" 
           variant="secondary" 
@@ -188,5 +201,9 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginTop: 'auto',
     marginBottom: 32,
-  }
+  },
+  moderatorBtn: {
+    backgroundColor: '#059669',
+    marginBottom: 10,
+  },
 });

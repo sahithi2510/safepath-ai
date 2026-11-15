@@ -9,19 +9,32 @@ import {
   ActivityIndicator,
   Switch,
   Alert,
+  Modal,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
+import { useAuth } from '../../context/AuthContext';
 import {
   submitReport,
   getMyReports,
+  getPendingReports,
+  getReportStats,
   verifyReport,
   ReportType,
   ReportStatus,
   CommunityReportResponse,
   SubmitReportResponse,
+  ReportStats,
 } from '../../services/reports';
+import {
+  getNotifications,
+  getUnreadNotifications,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+  NotificationItem,
+} from '../../services/notifications';
 
 interface CategoryOption {
   type: ReportType;
@@ -84,8 +97,14 @@ const CATEGORIES: CategoryOption[] = [
 type IncidentTimeOption = 'JUST_NOW' | 'PAST_HOUR' | 'EARLIER_TODAY' | 'YESTERDAY';
 
 export default function ReportsScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const isModerator =
+    user?.email?.toLowerCase().includes('admin') ||
+    user?.email === 'sahithidhanakudharam25@gmail.com';
+
   // Navigation / active tab
-  const [activeTab, setActiveTab] = useState<'SUBMIT' | 'HISTORY'>('SUBMIT');
+  const [activeTab, setActiveTab] = useState<'SUBMIT' | 'HISTORY' | 'MODERATOR'>('SUBMIT');
 
   // Form state
   const [selectedCategory, setSelectedCategory] = useState<ReportType>('POOR_LIGHTING');
@@ -109,6 +128,68 @@ export default function ReportsScreen() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Notifications state
+  const [unreadNotifications, setUnreadNotifications] = useState<NotificationItem[]>([]);
+  const [allNotifications, setAllNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
+
+  // Moderator state
+  const [pendingReports, setPendingReports] = useState<CommunityReportResponse[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [reportStats, setReportStats] = useState<ReportStats>({ pending: 0, verified: 0, rejected: 0 });
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const [unread, all] = await Promise.all([
+        getUnreadNotifications().catch(() => []),
+        getNotifications(0, 15).then((r) => r.content).catch(() => []),
+      ]);
+      setUnreadNotifications(unread);
+      setAllNotifications(all);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadPendingQueue = useCallback(async () => {
+    if (!isModerator) return;
+    setPendingLoading(true);
+    try {
+      const [pendingRes, statsRes] = await Promise.all([
+        getPendingReports(0, 30),
+        getReportStats().catch(() => ({ pending: 0, verified: 0, rejected: 0 })),
+      ]);
+      setPendingReports(pendingRes.content || []);
+      setReportStats(statsRes);
+    } catch {
+      // ignore
+    } finally {
+      setPendingLoading(false);
+    }
+  }, [isModerator]);
+
+  const handleDismissNotification = async (id: string) => {
+    try {
+      await markNotificationAsRead(id);
+      setUnreadNotifications((prev) => prev.filter((n) => n.id !== id));
+      setAllNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await markAllNotificationsAsRead();
+      setUnreadNotifications([]);
+      setAllNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch {
+      // ignore
+    }
+  };
 
   const handleVerify = async (reportId: string) => {
     try {
@@ -254,10 +335,13 @@ export default function ReportsScreen() {
   }, []);
 
   useEffect(() => {
+    loadNotifications();
     if (activeTab === 'HISTORY') {
       loadHistory();
+    } else if (activeTab === 'MODERATOR') {
+      loadPendingQueue();
     }
-  }, [activeTab, loadHistory]);
+  }, [activeTab, loadHistory, loadPendingQueue, loadNotifications]);
 
   const getStatusColor = (status: ReportStatus) => {
     switch (status) {
@@ -296,11 +380,49 @@ export default function ReportsScreen() {
         </View>
       </View>
 
+      {/* In-App Notification Alert Banner */}
+      {unreadNotifications.length > 0 && (
+        <View style={styles.notificationAlertBanner} accessibilityRole="alert">
+          <Text style={styles.notificationAlertIcon}>🔔</Text>
+          <View style={styles.notificationAlertContent}>
+            <Text style={styles.notificationAlertTitle}>
+              {unreadNotifications[0].title}
+            </Text>
+            <Text style={styles.notificationAlertMsg}>
+              {unreadNotifications[0].message}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.notificationDismissBtn}
+            onPress={() => handleDismissNotification(unreadNotifications[0].id)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss notification"
+          >
+            <Text style={styles.notificationDismissText}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">
-          Community Safety Reports
-        </Text>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.title} accessibilityRole="header">
+            Community Reports
+          </Text>
+          <TouchableOpacity
+            style={styles.notificationBellBtn}
+            onPress={() => setNotificationsModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open notifications"
+          >
+            <Text style={styles.notificationBellIcon}>🔔</Text>
+            {unreadNotifications.length > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{unreadNotifications.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>
           Help improve neighborhood safety awareness by reporting hazards and unlit streets.
         </Text>
@@ -318,7 +440,7 @@ export default function ReportsScreen() {
           accessibilityState={{ selected: activeTab === 'SUBMIT' }}
         >
           <Text style={[styles.tabBtnText, activeTab === 'SUBMIT' && styles.tabBtnTextActive]}>
-            📝 Submit Report
+            📝 Submit
           </Text>
         </TouchableOpacity>
 
@@ -332,6 +454,25 @@ export default function ReportsScreen() {
             📋 My Reports
           </Text>
         </TouchableOpacity>
+
+        {isModerator && (
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'MODERATOR' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('MODERATOR')}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'MODERATOR' }}
+          >
+            <Text
+              style={[
+                styles.tabBtnText,
+                activeTab === 'MODERATOR' && styles.tabBtnTextActive,
+                styles.moderatorTabText,
+              ]}
+            >
+              🛡️ Queue {reportStats.pending > 0 ? `(${reportStats.pending})` : ''}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* TAB 1: SUBMIT REPORT */}
@@ -660,6 +801,31 @@ export default function ReportsScreen() {
                         <Text style={styles.impactMetricLbl}>Safe Detour</Text>
                       </View>
                     </View>
+
+                    {report.verificationNote && (
+                      <Text style={styles.verificationNoteText}>
+                        💬 Moderator Note: {report.verificationNote}
+                      </Text>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.impactDetourMapBtn}
+                      onPress={() => router.push('/(tabs)/routes')}
+                      accessibilityRole="button"
+                      accessibilityLabel="View Detour on Safe Routes Map"
+                    >
+                      <Text style={styles.impactDetourMapBtnText}>🗺️ View Detour on Routes Map</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {report.status === 'REJECTED' && (
+                  <View style={styles.rejectedImpactBox}>
+                    <Text style={styles.rejectedTitle}>❌ Report Rejected by Moderator</Text>
+                    <Text style={styles.rejectedDesc}>
+                      {report.verificationNote ||
+                        'This report was reviewed and marked as unverified or duplicate.'}
+                    </Text>
                   </View>
                 )}
 
@@ -668,25 +834,185 @@ export default function ReportsScreen() {
                     <Text style={styles.pendingNotice}>
                       ⏳ Under review by community moderators.
                     </Text>
-                    <TouchableOpacity
-                      style={styles.verifyBtn}
-                      onPress={() => handleVerify(report.id)}
-                      disabled={verifyingId === report.id}
-                      accessibilityRole="button"
-                      accessibilityLabel="Review and approve report"
-                    >
-                      {verifyingId === report.id ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.verifyBtnText}>🛡️ Review & Approve (Moderator)</Text>
-                      )}
-                    </TouchableOpacity>
+                    {isModerator && (
+                      <TouchableOpacity
+                        style={styles.verifyBtn}
+                        onPress={() => handleVerify(report.id)}
+                        disabled={verifyingId === report.id}
+                        accessibilityRole="button"
+                        accessibilityLabel="Review and approve report"
+                      >
+                        {verifyingId === report.id ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={styles.verifyBtnText}>🛡️ Quick Approve (Moderator)</Text>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
               </Card>
             ))}
         </View>
       )}
+
+      {/* TAB 3: MODERATOR QUEUE */}
+      {activeTab === 'MODERATOR' && (
+        <View>
+          <View style={styles.modHeaderCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.modHeaderTitle}>Pending Moderation Queue</Text>
+              <Text style={styles.modHeaderDesc}>
+                {pendingReports.length} hazard reports awaiting validation.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.openFullDeskBtn}
+              onPress={() => router.push('/moderator-dashboard')}
+              accessibilityRole="button"
+              accessibilityLabel="Open Full Moderator Dashboard"
+            >
+              <Text style={styles.openFullDeskBtnText}>Full Desk ↗</Text>
+            </TouchableOpacity>
+          </View>
+
+          {pendingLoading && (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.loadingText}>Fetching pending reports...</Text>
+            </View>
+          )}
+
+          {!pendingLoading && pendingReports.length === 0 && (
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyIcon}>🎉</Text>
+              <Text style={styles.emptyTitle}>Moderation Queue Clear</Text>
+              <Text style={styles.emptySubtitle}>
+                No pending safety reports need review. All citizen submissions have been processed!
+              </Text>
+              <Button title="Refresh Queue" onPress={loadPendingQueue} />
+            </Card>
+          )}
+
+          {!pendingLoading &&
+            pendingReports.map((report) => (
+              <Card key={report.id} style={styles.reportCard}>
+                <View style={styles.reportHeaderRow}>
+                  <View style={styles.reportTypeBadge}>
+                    <Text style={styles.reportTypeText}>{report.reportType.replace(/_/g, ' ')}</Text>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: '#FF9500' }]}>
+                    <Text style={styles.statusPillText}>PENDING</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.reportDescription}>
+                  {report.description || 'No additional description provided.'}
+                </Text>
+
+                <View style={styles.reportFooterRow}>
+                  <Text style={styles.reportDate}>
+                    {new Date(report.createdAt).toLocaleString()}
+                  </Text>
+                  <Text style={styles.reportPrecision}>
+                    {report.locationPrecision === 'EXACT_COORDINATE'
+                      ? `📍 ${report.latitude?.toFixed(4)}, ${report.longitude?.toFixed(4)}`
+                      : '⚪ Locality'}
+                  </Text>
+                </View>
+
+                <View style={styles.modActionRow}>
+                  <TouchableOpacity
+                    style={[styles.quickModBtn, styles.quickApproveBtn]}
+                    onPress={() => handleVerify(report.id)}
+                    disabled={verifyingId === report.id}
+                  >
+                    {verifyingId === report.id ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.quickModBtnText}>✅ Approve & Reroute</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.quickModBtn, styles.quickDeskBtn]}
+                    onPress={() => router.push('/moderator-dashboard')}
+                  >
+                    <Text style={styles.quickDeskBtnText}>Review in Desk</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))}
+        </View>
+      )}
+
+      {/* Notifications Modal */}
+      <Modal
+        visible={notificationsModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setNotificationsModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.notifSheetCard}>
+            <View style={styles.notifSheetHeader}>
+              <Text style={styles.notifSheetTitle}>🔔 In-App Safety Alerts</Text>
+              <TouchableOpacity onPress={() => setNotificationsModalOpen(false)}>
+                <Text style={styles.notifCloseText}>✕ Close</Text>
+              </TouchableOpacity>
+            </View>
+
+            {allNotifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.markAllReadBtn}
+                onPress={handleMarkAllNotificationsRead}
+              >
+                <Text style={styles.markAllReadText}>Mark All as Read</Text>
+              </TouchableOpacity>
+            )}
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              {allNotifications.length === 0 ? (
+                <View style={styles.emptyNotifBox}>
+                  <Text style={styles.emptyNotifIcon}>🔕</Text>
+                  <Text style={styles.emptyNotifTitle}>No Notifications</Text>
+                  <Text style={styles.emptyNotifSubtitle}>
+                    You will receive instant alerts here whenever a report you submit is verified or updated by moderators.
+                  </Text>
+                </View>
+              ) : (
+                allNotifications.map((n) => (
+                  <View
+                    key={n.id}
+                    style={[styles.notifItem, !n.read && styles.notifItemUnread]}
+                  >
+                    <View style={styles.notifItemTop}>
+                      <Text style={styles.notifItemTitle}>{n.title}</Text>
+                      {!n.read && <View style={styles.unreadDot} />}
+                    </View>
+                    <Text style={styles.notifItemMessage}>{n.message}</Text>
+                    <View style={styles.notifItemBottom}>
+                      <Text style={styles.notifItemDate}>
+                        {new Date(n.createdAt).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      {!n.read && (
+                        <TouchableOpacity onPress={() => handleDismissNotification(n.id)}>
+                          <Text style={styles.markSingleReadText}>Mark read</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1274,5 +1600,282 @@ const styles = StyleSheet.create({
     width: 1,
     height: 20,
     backgroundColor: '#E5E5EA',
+  },
+  verificationNoteText: {
+    fontSize: 11,
+    color: '#2E7D32',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  impactDetourMapBtn: {
+    marginTop: 8,
+    backgroundColor: '#2E7D32',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  impactDetourMapBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rejectedImpactBox: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF3B30',
+  },
+  rejectedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#D70015',
+    marginBottom: 2,
+  },
+  rejectedDesc: {
+    fontSize: 11,
+    color: '#8E8E93',
+    lineHeight: 15,
+  },
+  notificationAlertBanner: {
+    backgroundColor: '#E5F1FF',
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  notificationAlertIcon: {
+    fontSize: 22,
+    marginRight: 10,
+  },
+  notificationAlertContent: {
+    flex: 1,
+  },
+  notificationAlertTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#007AFF',
+    marginBottom: 2,
+  },
+  notificationAlertMsg: {
+    fontSize: 11,
+    color: '#3A3A3C',
+    lineHeight: 15,
+  },
+  notificationDismissBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  notificationDismissText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notificationBellBtn: {
+    padding: 8,
+    position: 'relative',
+  },
+  notificationBellIcon: {
+    fontSize: 20,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#FF3B30',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bellBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  moderatorTabText: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  modHeaderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#059669',
+  },
+  modHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  modHeaderDesc: {
+    fontSize: 11,
+    color: '#636366',
+    marginTop: 2,
+  },
+  openFullDeskBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  openFullDeskBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  quickModBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  quickApproveBtn: {
+    backgroundColor: '#34C759',
+  },
+  quickModBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  quickDeskBtn: {
+    backgroundColor: '#E5E5EA',
+  },
+  quickDeskBtnText: {
+    color: '#1C1C1E',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  notifSheetCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 16,
+    paddingBottom: 32,
+    maxHeight: '80%',
+  },
+  notifSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  notifSheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1C1C1E',
+  },
+  notifCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  markAllReadBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 10,
+  },
+  markAllReadText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  emptyNotifBox: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyNotifIcon: {
+    fontSize: 36,
+    marginBottom: 8,
+  },
+  emptyNotifTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  emptyNotifSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  notifItem: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  notifItemUnread: {
+    backgroundColor: '#EBF4FF',
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  notifItemTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  notifItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    flex: 1,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#007AFF',
+  },
+  notifItemMessage: {
+    fontSize: 12,
+    color: '#3A3A3C',
+    lineHeight: 16,
+    marginBottom: 6,
+  },
+  notifItemBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notifItemDate: {
+    fontSize: 10,
+    color: '#8E8E93',
+  },
+  markSingleReadText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });

@@ -46,6 +46,9 @@ class CommunityReportServiceTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private NotificationService notificationService;
+
     @Spy
     private ReportRateLimiterService rateLimiterService = new ReportRateLimiterService();
 
@@ -357,5 +360,40 @@ class CommunityReportServiceTest {
         assertThat(page.getTotalElements()).isEqualTo(2);
         assertThat(page.getContent().get(0).getStatus()).isEqualTo(CommunityReport.ReportStatus.PENDING);
         assertThat(page.getContent().get(1).getStatus()).isEqualTo(CommunityReport.ReportStatus.VERIFIED);
+    }
+
+    @Test
+    @DisplayName("Get pending reports retrieves all unmoderated submissions for moderator review")
+    void getPendingReports_returnsPendingSubmissions() {
+        CommunityReport r1 = CommunityReport.builder()
+                .id(UUID.randomUUID())
+                .user(mockUser)
+                .reportType(CommunityReport.ReportType.ROAD_BLOCKAGE)
+                .status(CommunityReport.ReportStatus.PENDING)
+                .createdAt(OffsetDateTime.now())
+                .build();
+
+        when(reportRepository.findByStatusOrderByCreatedAtDesc(eq(CommunityReport.ReportStatus.PENDING), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of(r1)));
+
+        Page<CommunityReportDto.Response> page = reportService.getPendingReports(PageRequest.of(0, 10));
+
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getContent().get(0).getStatus()).isEqualTo(CommunityReport.ReportStatus.PENDING);
+        assertThat(page.getContent().get(0).getReportType()).isEqualTo(CommunityReport.ReportType.ROAD_BLOCKAGE);
+    }
+
+    @Test
+    @DisplayName("Get report statistics returns accurate volume breakdown")
+    void getReportStatistics_returnsAccurateCounts() {
+        when(reportRepository.countByStatus(CommunityReport.ReportStatus.PENDING)).thenReturn(5L);
+        when(reportRepository.countByStatus(CommunityReport.ReportStatus.VERIFIED)).thenReturn(12L);
+        when(reportRepository.countByStatus(CommunityReport.ReportStatus.REJECTED)).thenReturn(2L);
+
+        java.util.Map<String, Long> stats = reportService.getReportStatistics();
+
+        assertThat(stats.get("pending")).isEqualTo(5L);
+        assertThat(stats.get("verified")).isEqualTo(12L);
+        assertThat(stats.get("rejected")).isEqualTo(2L);
     }
 }

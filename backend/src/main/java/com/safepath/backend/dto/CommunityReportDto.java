@@ -52,6 +52,8 @@ public class CommunityReportDto {
         private Double longitude;
         private CommunityReport.LocationPrecision locationPrecision;
         private CommunityReport.ReportStatus status;
+        private String verificationNote;
+        private OffsetDateTime verifiedAt;
         private OffsetDateTime incidentDatetime;
         private OffsetDateTime createdAt;
         private Double distanceMeters; // populated in nearby queries

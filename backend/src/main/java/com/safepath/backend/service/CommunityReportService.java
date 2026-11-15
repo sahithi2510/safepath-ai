@@ -45,6 +45,7 @@ public class CommunityReportService {
     private final CommunityReportRepository reportRepository;
     private final UserService userService;
     private final ReportRateLimiterService rateLimiterService;
+    private final NotificationService notificationService;
 
     private static final GeometryFactory GEOMETRY_FACTORY =
             new GeometryFactory(new PrecisionModel(), 4326);
@@ -214,7 +215,55 @@ public class CommunityReportService {
         log.info("Report {} transition to {} by moderator {}",
                 reportId, updated.getStatus(), moderatorUser.getId());
 
+        // Notify the original reporter of the status transition
+        try {
+            if (updated.getUser() != null) {
+                String title = updated.getStatus() == CommunityReport.ReportStatus.VERIFIED
+                        ? "Report Verified! 🎉"
+                        : "Report Status Update";
+                String message = updated.getStatus() == CommunityReport.ReportStatus.VERIFIED
+                        ? "Your safety report for " + updated.getReportType().name().replace('_', ' ')
+                                + " has been verified by safety moderators. Live route detours are now active to protect pedestrians."
+                        : "Your safety report for " + updated.getReportType().name().replace('_', ' ')
+                                + " was reviewed: " + (updated.getVerificationNote() != null && !updated.getVerificationNote().isBlank()
+                                ? updated.getVerificationNote()
+                                : "Status updated to " + updated.getStatus());
+
+                notificationService.createNotification(
+                        updated.getUser(),
+                        title,
+                        message,
+                        "REPORT_STATUS_CHANGED",
+                        updated.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to create in-app notification for user on report verification", e);
+        }
+
         return toResponse(updated);
+    }
+
+    /**
+     * Get all pending reports awaiting moderation (MODERATOR or ADMIN only).
+     */
+    @Transactional(readOnly = true)
+    public Page<CommunityReportDto.Response> getPendingReports(Pageable pageable) {
+        return reportRepository
+                .findByStatusOrderByCreatedAtDesc(CommunityReport.ReportStatus.PENDING, pageable)
+                .map(this::toResponse);
+    }
+
+    /**
+     * Get report volume statistics for moderator dashboards.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> getReportStatistics() {
+        return java.util.Map.of(
+                "pending", reportRepository.countByStatus(CommunityReport.ReportStatus.PENDING),
+                "verified", reportRepository.countByStatus(CommunityReport.ReportStatus.VERIFIED),
+                "rejected", reportRepository.countByStatus(CommunityReport.ReportStatus.REJECTED)
+        );
     }
 
     /**
@@ -244,6 +293,8 @@ public class CommunityReportService {
                 .longitude(r.getLongitude())
                 .locationPrecision(r.getLocationPrecision())
                 .status(r.getStatus())
+                .verificationNote(r.getVerificationNote())
+                .verifiedAt(r.getVerifiedAt())
                 .incidentDatetime(r.getIncidentDatetime())
                 .createdAt(r.getCreatedAt())
                 .build();

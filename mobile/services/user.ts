@@ -15,6 +15,7 @@ export interface UserProfile {
   fullName: string;
   phoneNumber?: string | null;
   routePreference: RoutePreference;
+  roles?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
