@@ -48,3 +48,4 @@ public class AdminUserController {
         return ResponseEntity.ok(userService.updateUserRole(id, request, adminDetails));
     }
 }
+

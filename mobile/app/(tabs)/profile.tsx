@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { UserService, UserProfile } from '../../services/user';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ServerConfigModal } from '../../components/ServerConfigModal';
 import { useRouter, useFocusEffect } from 'expo-router';
 
 export default function ProfileScreen() {
@@ -11,6 +12,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [profileData, setProfileData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [serverModalVisible, setServerModalVisible] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -111,6 +113,11 @@ export default function ProfileScreen() {
           variant="secondary" 
           onPress={() => router.push('/settings')} 
         />
+        <Button 
+          title="🌐 Server & Cloud API Settings" 
+          variant="secondary" 
+          onPress={() => setServerModalVisible(true)} 
+        />
       </View>
 
       <Button 
@@ -118,6 +125,11 @@ export default function ProfileScreen() {
         variant="danger" 
         onPress={handleLogout} 
         style={styles.logoutButton}
+      />
+
+      <ServerConfigModal 
+        visible={serverModalVisible} 
+        onClose={() => setServerModalVisible(false)} 
       />
     </ScrollView>
   );

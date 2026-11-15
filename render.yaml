@@ -1,0 +1,61 @@
+# ============================================================
+# SafePath AI — Render Infrastructure as Code (100% Free Tier)
+# ============================================================
+# How to deploy on Render (Zero-cost cloud hosting):
+# 1. Push this repo to your GitHub account (already done).
+# 2. Go to https://dashboard.render.com and sign up with GitHub.
+# 3. Click "New" -> "Blueprint".
+# 4. Select your "safepath-ai" repository and click "Apply".
+# Render automatically provisions:
+#   - Managed PostgreSQL database
+#   - FastAPI ML Service
+#   - Spring Boot Core API with free HTTPS (https://safepath-backend.onrender.com/api)
+# ============================================================
+
+services:
+  # 1. Spring Boot Core Backend Service
+  - type: web
+    name: safepath-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: safepath-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRATION_MS
+        value: 86400000
+      - key: ML_SERVICE_URL
+        fromService:
+          type: web
+          name: safepath-ml
+          property: host
+      - key: CORS_ALLOWED_ORIGINS
+        value: "*"
+
+  # 2. FastAPI Machine Learning Service
+  - type: web
+    name: safepath-ml
+    runtime: docker
+    dockerfilePath: ./ml-service/Dockerfile
+    dockerContext: ./ml-service
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: ML_LOG_LEVEL
+        value: info
+
+databases:
+  # 3. Persistent Managed PostgreSQL Database
+  - name: safepath-db
+    plan: free
+    region: oregon
+    databaseName: safepath_db
+    user: safepath_user

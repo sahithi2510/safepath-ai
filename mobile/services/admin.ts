@@ -48,3 +48,4 @@ export const updateUserRole = async (
   const response = await api.put<AdminUserSummary>(`/admin/users/${userId}/roles`, request);
   return response.data;
 };
+

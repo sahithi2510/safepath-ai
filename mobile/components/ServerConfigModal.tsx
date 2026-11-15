@@ -100,14 +100,35 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({ visible, o
         <View style={styles.dialog}>
           <Text style={styles.title}>Server Configuration</Text>
           <Text style={styles.description}>
-            Configure the backend server URL. If running locally on your computer, enter your PC local Wi-Fi IP (e.g. http://192.168.x.x:8080/api) or an HTTPS tunnel URL.
+            Configure the backend server URL. Select a preset or type your permanent cloud server address (e.g. https://your-server.com/api).
           </Text>
+
+          <View style={styles.presetsRow}>
+            <TouchableOpacity
+              style={styles.presetChip}
+              onPress={() => setUrl('https://safepath-backend.onrender.com/api')}
+            >
+              <Text style={styles.presetChipText}>☁️ Render Cloud</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.presetChip}
+              onPress={() => setUrl('http://10.0.2.2:8080/api')}
+            >
+              <Text style={styles.presetChipText}>📱 Android Emul</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.presetChip}
+              onPress={() => setUrl('http://localhost:8080/api')}
+            >
+              <Text style={styles.presetChipText}>💻 Localhost</Text>
+            </TouchableOpacity>
+          </View>
 
           <Input
             label="Backend API Base URL"
             value={url}
             onChangeText={setUrl}
-            placeholder="http://192.168.x.x:8080/api"
+            placeholder="https://your-server.com/api"
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -264,5 +285,25 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#8E8E93',
     fontSize: 14,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#007AFF',
   },
 });

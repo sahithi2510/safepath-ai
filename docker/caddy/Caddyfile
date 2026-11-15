@@ -1,0 +1,33 @@
+{
+    email {$SSL_EMAIL:admin@safepath.ai}
+}
+
+{$DOMAIN_NAME:localhost} {
+    encode gzip zstd
+
+    # Health check route
+    handle /health {
+        reverse_proxy backend:8080 {
+            rewrite /api/health
+        }
+    }
+
+    # API endpoints
+    handle /api/* {
+        reverse_proxy backend:8080
+    }
+
+    # Swagger Documentation
+    handle /swagger-ui/* {
+        reverse_proxy backend:8080
+    }
+
+    handle /v3/api-docs/* {
+        reverse_proxy backend:8080
+    }
+
+    # Default landing status
+    handle {
+        respond "SafePath AI Production Backend is running securely over HTTPS. Use /api for endpoints." 200
+    }
+}
