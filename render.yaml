@@ -42,18 +42,21 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         value: "*"
 
-  # 2. FastAPI Machine Learning Service (Private Service - Internal Only)
-  - type: pserv
+  # 2. FastAPI Machine Learning Service (Free Web Service)
+  - type: web
     name: safepath-ml
     runtime: docker
     dockerfilePath: ./ml-service/Dockerfile
     dockerContext: ./ml-service
     plan: free
     region: oregon
+    healthCheckPath: /health
     envVars:
       - key: ML_HOST
         value: 0.0.0.0
       - key: ML_PORT
+        value: 8001
+      - key: PORT
         value: 8001
       - key: ML_LOG_LEVEL
         value: info
