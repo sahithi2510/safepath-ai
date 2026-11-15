@@ -24,8 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app /app/app
-# Create models directory (to be mounted as a volume in prod)
-RUN mkdir -p /app/models && chown -R safepath:safepath /app
+# Copy trained ML models into container
+COPY ./models /app/models
+RUN chown -R safepath:safepath /app
 
 # Switch to non-root user
 USER safepath

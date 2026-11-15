@@ -1,0 +1,17 @@
+[
+  "crime_density_500m",
+  "crime_density_1km",
+  "severity_weighted_density",
+  "recent_crime_density",
+  "night_crime_density",
+  "hour_of_day",
+  "day_of_week",
+  "lighting_score",
+  "activity_proxy",
+  "nearest_police_m",
+  "nearest_hospital_m",
+  "nearest_transport_m",
+  "weather_precipitation",
+  "weather_visibility",
+  "verified_report_count"
+]

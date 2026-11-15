@@ -1,0 +1,70 @@
+{
+  "model_type": "xgboost",
+  "version": "1.0.0",
+  "task_type": "classifier",
+  "trained_at": "2026-11-15T05:42:42.042285+00:00",
+  "training_dataset": "urban_crime_safety_train.csv",
+  "is_synthetic_evaluation": false,
+  "records_used": {
+    "train": 1050,
+    "val": 225,
+    "test": 225,
+    "total": 1500
+  },
+  "features": [
+    "crime_density_500m",
+    "crime_density_1km",
+    "severity_weighted_density",
+    "recent_crime_density",
+    "night_crime_density",
+    "hour_of_day",
+    "day_of_week",
+    "lighting_score",
+    "activity_proxy",
+    "nearest_police_m",
+    "nearest_hospital_m",
+    "nearest_transport_m",
+    "weather_precipitation",
+    "weather_visibility",
+    "verified_report_count"
+  ],
+  "metrics": {
+    "accuracy": 0.9511,
+    "precision": 0.9767,
+    "recall": 0.9403,
+    "f1_score": 0.9582,
+    "roc_auc": 0.9853,
+    "confusion_matrix": [
+      [
+        88,
+        3
+      ],
+      [
+        8,
+        126
+      ]
+    ]
+  },
+  "baseline_metrics": {
+    "baseline_type": "DummyClassifier(most_frequent)",
+    "accuracy": 0.4044
+  },
+  "feature_importances": {
+    "crime_density_500m": 0.0357,
+    "crime_density_1km": 0.0742,
+    "severity_weighted_density": 0.2624,
+    "recent_crime_density": 0.0363,
+    "night_crime_density": 0.1308,
+    "hour_of_day": 0.0728,
+    "day_of_week": 0.0193,
+    "lighting_score": 0.0748,
+    "activity_proxy": 0.12,
+    "nearest_police_m": 0.0367,
+    "nearest_hospital_m": 0.0241,
+    "nearest_transport_m": 0.0357,
+    "weather_precipitation": 0.0366,
+    "weather_visibility": 0.0206,
+    "verified_report_count": 0.0199
+  },
+  "notes": "[REAL DATA EVALUATION] XGBoost classifier with scale_pos_weight=1.24 for class imbalance."
+}

@@ -112,3 +112,4 @@ echo "2. On the Login screen, tap '⚙️ Server Settings'."
 echo "3. Enter: https://${PUBLIC_IP}/api"
 echo "4. Tap 'Test Connection' and then 'Save & Use URL'."
 echo "============================================================"
+

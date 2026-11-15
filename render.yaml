@@ -1,19 +1,9 @@
 # ============================================================
 # SafePath AI — Render Infrastructure as Code (100% Free Tier)
 # ============================================================
-# How to deploy on Render (Zero-cost cloud hosting):
-# 1. Push this repo to your GitHub account (already done).
-# 2. Go to https://dashboard.render.com and sign up with GitHub.
-# 3. Click "New" -> "Blueprint".
-# 4. Select your "safepath-ai" repository and click "Apply".
-# Render automatically provisions:
-#   - Managed PostgreSQL database
-#   - FastAPI ML Service
-#   - Spring Boot Core API with free HTTPS (https://safepath-backend.onrender.com/api)
-# ============================================================
 
 services:
-  # 1. Spring Boot Core Backend Service
+  # 1. Spring Boot Core Backend Service (Public HTTPS Web Service)
   - type: web
     name: safepath-backend
     runtime: docker
@@ -23,32 +13,48 @@ services:
     region: oregon
     healthCheckPath: /api/health
     envVars:
-      - key: SPRING_DATASOURCE_URL
+      - key: POSTGRES_HOST
         fromDatabase:
           name: safepath-db
-          property: connectionString
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: safepath-db
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: safepath-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: safepath-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: safepath-db
+          property: password
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRATION_MS
         value: 86400000
       - key: ML_SERVICE_URL
-        fromService:
-          type: web
-          name: safepath-ml
-          property: host
+        value: http://safepath-ml:8001
       - key: CORS_ALLOWED_ORIGINS
         value: "*"
 
-  # 2. FastAPI Machine Learning Service
-  - type: web
+  # 2. FastAPI Machine Learning Service (Private Service - Internal Only)
+  - type: pserv
     name: safepath-ml
     runtime: docker
     dockerfilePath: ./ml-service/Dockerfile
     dockerContext: ./ml-service
     plan: free
     region: oregon
-    healthCheckPath: /health
     envVars:
+      - key: ML_HOST
+        value: 0.0.0.0
+      - key: ML_PORT
+        value: 8001
       - key: ML_LOG_LEVEL
         value: info
 

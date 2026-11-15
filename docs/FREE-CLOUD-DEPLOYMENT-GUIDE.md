@@ -181,3 +181,4 @@ If compiling a standalone Android APK:
    npx expo start
    ```
 The app will now communicate directly with your 24/7 cloud server without your laptop needing to be on!
+
