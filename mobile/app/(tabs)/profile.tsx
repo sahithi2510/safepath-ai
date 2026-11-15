@@ -43,11 +43,14 @@ export default function ProfileScreen() {
   }
 
   const currentPref = profileData?.routePreference || user?.routePreference || 'STANDARD';
-  const isModerator =
-    profileData?.roles?.includes('ROLE_MODERATOR') ||
+  const isAdmin =
     profileData?.roles?.includes('ROLE_ADMIN') ||
     user?.email?.toLowerCase().includes('admin') ||
     user?.email === 'sahithidhanakudharam25@gmail.com';
+  const isModerator =
+    profileData?.roles?.includes('ROLE_MODERATOR') ||
+    profileData?.roles?.includes('ROLE_ADMIN') ||
+    isAdmin;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -77,6 +80,14 @@ export default function ProfileScreen() {
       <View style={styles.settingsSection}>
         <Text style={styles.sectionTitle}>Account</Text>
         
+        {isAdmin && (
+          <Button 
+            title="👑 Admin: Manage User Roles" 
+            variant="primary" 
+            onPress={() => router.push('/admin-users')} 
+            style={styles.adminBtn}
+          />
+        )}
         {isModerator && (
           <Button 
             title="🛡️ Moderator Dashboard" 
@@ -201,6 +212,10 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginTop: 'auto',
     marginBottom: 32,
+  },
+  adminBtn: {
+    backgroundColor: '#7C3AED',
+    marginBottom: 10,
   },
   moderatorBtn: {
     backgroundColor: '#059669',

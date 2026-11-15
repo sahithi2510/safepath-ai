@@ -16,3 +16,4 @@ CREATE TABLE user_notifications (
 CREATE INDEX idx_user_notifications_user_id   ON user_notifications(user_id);
 CREATE INDEX idx_user_notifications_unread    ON user_notifications(user_id, is_read);
 CREATE INDEX idx_user_notifications_created   ON user_notifications(created_at DESC);
+

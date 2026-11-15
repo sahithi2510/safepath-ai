@@ -80,4 +80,14 @@ public class User {
     public void addRole(Role role) {
         this.roles.add(role);
     }
+
+    /** Convenience method to remove a role. */
+    public void removeRole(Role.RoleName roleName) {
+        this.roles.removeIf(r -> r.getName() == roleName);
+    }
+
+    /** Check if user possesses a given role. */
+    public boolean hasRole(Role.RoleName roleName) {
+        return this.roles.stream().anyMatch(r -> r.getName() == roleName);
+    }
 }
