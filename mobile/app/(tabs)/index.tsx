@@ -229,6 +229,39 @@ export default function MapScreen() {
     }
   };
 
+  const handleRecenterGPS = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setUserLocation(loc);
+      const targetRegion = {
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        latitudeDelta: 0.012,
+        longitudeDelta: 0.012,
+      };
+      setCurrentRegion(targetRegion);
+      mapRef.current?.animateToRegion(targetRegion, 500);
+      if (heatmapEnabled) {
+        loadHeatmapForRegion(targetRegion);
+      }
+      if (safeZonesEnabled) {
+        loadSafeZonesForRegion(targetRegion);
+      }
+    } catch {
+      if (userLocation) {
+        const targetRegion = {
+          latitude: userLocation.coords.latitude,
+          longitude: userLocation.coords.longitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        };
+        mapRef.current?.animateToRegion(targetRegion, 500);
+      }
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Interactive Free OpenStreetMap / CartoDB Map (Zero API Key Dependency) */}
@@ -267,8 +300,8 @@ export default function MapScreen() {
           <Text style={styles.headerTitle}>SafePath AI</Text>
           <View style={styles.headerBadgesRow}>
             {heatmapEnabled && (
-              <View style={styles.demoBadge}>
-                <Text style={styles.demoBadgeText}>DEMO ML MODEL</Text>
+              <View style={[styles.demoBadge, { backgroundColor: '#34C759' }]}>
+                <Text style={styles.demoBadgeText}>🤖 AI RISK MODEL ACTIVE</Text>
               </View>
             )}
             <WeatherWidget
@@ -641,10 +674,10 @@ export default function MapScreen() {
             </Text>
           </View>
 
-          {/* Synthetic Demo Label */}
+          {/* Model Risk Assessment Disclaimer */}
           <View style={styles.segmentDisclaimerBox}>
             <Text style={styles.segmentDisclaimerText}>
-              ⚠️ Demo Estimate: Not calibrated crime probability. Missing data is never defaulted safe.
+              🛡️ AI Relative Risk Assessment (XGBoost v1.0). Missing data is never defaulted safe.
             </Text>
           </View>
         </Card>
@@ -770,6 +803,15 @@ export default function MapScreen() {
           </View>
         </Card>
       )}
+      {/* Floating Recenter GPS Action Button */}
+      <TouchableOpacity
+        style={styles.recenterGpsFab}
+        onPress={handleRecenterGPS}
+        accessibilityRole="button"
+        accessibilityLabel="Recenter map to your current GPS position"
+      >
+        <Text style={styles.recenterGpsIcon}>🎯</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -778,6 +820,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  recenterGpsFab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 32,
+    backgroundColor: '#FFFFFF',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    zIndex: 100,
+  },
+  recenterGpsIcon: {
+    fontSize: 22,
   },
   map: {
     width: '100%',

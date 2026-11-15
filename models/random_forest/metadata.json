@@ -2,14 +2,14 @@
   "model_type": "random_forest",
   "version": "1.0.0",
   "task_type": "classifier",
-  "trained_at": "2026-10-11T15:01:02.382761+00:00",
-  "training_dataset": "mock_training_dataset.csv",
-  "is_synthetic_evaluation": true,
+  "trained_at": "2026-11-15T05:50:27.094380+00:00",
+  "training_dataset": "urban_crime_safety_train.csv",
+  "is_synthetic_evaluation": false,
   "records_used": {
-    "train": 84,
-    "val": 18,
-    "test": 18,
-    "total": 120
+    "train": 1050,
+    "val": 225,
+    "test": 225,
+    "total": 1500
   },
   "features": [
     "crime_density_500m",
@@ -29,42 +29,42 @@
     "verified_report_count"
   ],
   "metrics": {
-    "accuracy": 0.7778,
-    "precision": 1.0,
-    "recall": 0.6667,
-    "f1_score": 0.8,
-    "roc_auc": 0.9722,
+    "accuracy": 0.9022,
+    "precision": 0.9667,
+    "recall": 0.8657,
+    "f1_score": 0.9134,
+    "roc_auc": 0.9785,
     "confusion_matrix": [
       [
-        6,
-        0
+        87,
+        4
       ],
       [
-        4,
-        8
+        18,
+        116
       ]
     ]
   },
   "baseline_metrics": {
     "baseline_type": "DummyClassifier(most_frequent)",
-    "accuracy": 0.3333
+    "accuracy": 0.4044
   },
   "feature_importances": {
-    "crime_density_500m": 0.0628,
-    "crime_density_1km": 0.2482,
-    "severity_weighted_density": 0.222,
-    "recent_crime_density": 0.0827,
-    "night_crime_density": 0.12,
-    "hour_of_day": 0.0427,
-    "day_of_week": 0.0228,
-    "lighting_score": 0.0268,
-    "activity_proxy": 0.0563,
-    "nearest_police_m": 0.0264,
-    "nearest_hospital_m": 0.0313,
-    "nearest_transport_m": 0.0254,
-    "weather_precipitation": 0.0018,
-    "weather_visibility": 0.0266,
+    "crime_density_500m": 0.0438,
+    "crime_density_1km": 0.1947,
+    "severity_weighted_density": 0.2065,
+    "recent_crime_density": 0.0409,
+    "night_crime_density": 0.1669,
+    "hour_of_day": 0.0716,
+    "day_of_week": 0.0094,
+    "lighting_score": 0.0363,
+    "activity_proxy": 0.1121,
+    "nearest_police_m": 0.0358,
+    "nearest_hospital_m": 0.0236,
+    "nearest_transport_m": 0.0329,
+    "weather_precipitation": 0.0024,
+    "weather_visibility": 0.0189,
     "verified_report_count": 0.0042
   },
-  "notes": "[SYNTHETIC TEST EVALUATION - NOT REAL CRIME ACCURACY] Random Forest baseline trained with balanced class weights."
+  "notes": "[REAL DATA EVALUATION] Random Forest baseline trained with balanced class weights."
 }

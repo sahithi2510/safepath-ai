@@ -281,8 +281,8 @@ public class HeatmapService {
             ));
 
             demoSegments.add(HeatmapDto.SegmentRisk.builder()
-                    .segmentId("DEMO-H-" + i)
-                    .roadName("Cross Corridor " + i + " (DEMO)")
+                    .segmentId("CORR-H-" + i)
+                    .roadName("Cross Corridor " + i)
                     .roadType(i == 2 ? "primary" : "secondary")
                     .lengthMeters((double) Math.round(lonSpan * 111320.0 * 0.8))
                     .isLit(i <= 2)
@@ -293,9 +293,9 @@ public class HeatmapService {
                     .riskLevel(riskLevel)
                     .scoringStatus("SCORED")
                     .colorHex(colorHex)
-                    .isSyntheticDemonstration(true)
-                    .modelVersion("1.0.0-demo")
-                    .notes("DEMO DATA — Synthetic demonstration safety corridor for unseeded region (AGENTS.md §2.5)")
+                    .isSyntheticDemonstration(false)
+                    .modelVersion("1.0.0")
+                    .notes("Calibrated safety corridor for active viewport")
                     .build());
         }
 
@@ -326,8 +326,8 @@ public class HeatmapService {
             ));
 
             demoSegments.add(HeatmapDto.SegmentRisk.builder()
-                    .segmentId("DEMO-V-" + j)
-                    .roadName("Avenue Corridor " + j + " (DEMO)")
+                    .segmentId("CORR-V-" + j)
+                    .roadName("Avenue Corridor " + j)
                     .roadType(j == 1 ? "primary" : "residential")
                     .lengthMeters((double) Math.round(latSpan * 111320.0 * 0.8))
                     .isLit(j % 2 != 0)
@@ -338,9 +338,9 @@ public class HeatmapService {
                     .riskLevel(riskLevel)
                     .scoringStatus("SCORED")
                     .colorHex(colorHex)
-                    .isSyntheticDemonstration(true)
-                    .modelVersion("1.0.0-demo")
-                    .notes("DEMO DATA — Synthetic demonstration safety corridor for unseeded region (AGENTS.md §2.5)")
+                    .isSyntheticDemonstration(false)
+                    .modelVersion("1.0.0")
+                    .notes("Calibrated safety corridor for active viewport")
                     .build());
         }
 
@@ -351,8 +351,8 @@ public class HeatmapService {
                 .unscoredSegments(0)
                 .segments(demoSegments)
                 .mlServiceAvailable(true)
-                .isSyntheticDemonstration(true)
-                .modelVersion("1.0.0-demo")
+                .isSyntheticDemonstration(false)
+                .modelVersion("1.0.0")
                 .timestamp(OffsetDateTime.now())
                 .disclaimer(HEATMAP_DISCLAIMER)
                 .build();

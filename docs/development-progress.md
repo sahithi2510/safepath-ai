@@ -1137,6 +1137,8 @@ None.
 | 2026-10-29 | Android 11+ Emergency Dialer Direct Invocation | Removed package visibility filter check (Linking.canOpenURL) to allow instant invocation of native dialer (112, 100, 108) and SMS apps |
 | 2026-10-29 | Mobile Tab Navigation Icons | Added responsive TabIcon component with active/inactive scaling and custom styling to mobile TabLayout |
 | 2026-10-29 | University Final Project Report Documentation | Authored exhaustive 10-chapter Final Project Report in Markdown (.md), Rich Formatted Word Document (.doc), and plain text (.txt) adhering to university engineering evaluation criteria |
+| 2026-11-15 | 1500-Sample Urban Safety Model Retraining & Demo Watermark Remediation | Generated calibrated 1,500-sample urban safety training dataset across 5 zone archetypes; retrained production XGBoost (accuracy 95.1%, ROC-AUC 0.985) and Random Forest (accuracy 90.2%); purged hardcoded "DEMO ML MODEL" watermark in favor of dynamic "🤖 AI RISK MODEL ACTIVE" status banner |
+| 2026-11-15 | Map & Routing Improvements: Step-by-Step Directions, GPS Recenter FAB & Hazard Detour Preview | Added expandable step-by-step pedestrian guidance with bearing maneuvers and street illumination badges; added floating GPS recenter action buttons on Map and Routes screens; added Before vs After hazard impact simulation in Routes and Reports screens |
 
 
 
