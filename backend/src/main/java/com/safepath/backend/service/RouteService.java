@@ -770,9 +770,20 @@ public class RouteService {
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(5))
                     .build();
+
+            String osrmProfile = "foot";
+            if (request != null && request.getTravelMode() != null) {
+                String tm = request.getTravelMode().trim().toUpperCase(Locale.ROOT);
+                if (tm.contains("DRIVE") || tm.contains("CAR") || tm.contains("MOTOR")) {
+                    osrmProfile = "driving";
+                } else if (tm.contains("BIKE") || tm.contains("CYCLE") || tm.contains("BICYCL")) {
+                    osrmProfile = "bike";
+                }
+            }
+
             String url = String.format(Locale.US,
-                    "https://router.project-osrm.org/route/v1/foot/%f,%f;%f,%f?overview=full&geometries=geojson&alternatives=true",
-                    startLon, startLat, endLon, endLat);
+                    "https://router.project-osrm.org/route/v1/%s/%f,%f;%f,%f?overview=full&geometries=geojson&alternatives=true",
+                    osrmProfile, startLon, startLat, endLon, endLat);
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -813,7 +824,18 @@ public class RouteService {
         // If OSRM returned empty (or offline), interpolate coordinates
         if (alternativeRoutes.isEmpty()) {
             double dist = calculateHaversineDistance(startLat, startLon, endLat, endLon);
-            double dur = dist / 1.35; // average walking speed 1.35 m/s
+            double speed = 1.35; // average walking speed 1.35 m/s
+            if (request != null && request.getTravelMode() != null) {
+                String tm = request.getTravelMode().trim().toUpperCase(Locale.ROOT);
+                if (tm.contains("DRIVE") || tm.contains("CAR") || tm.contains("MOTOR")) {
+                    speed = 11.1; // ~40 km/h
+                } else if (tm.contains("BIKE") || tm.contains("CYCLE") || tm.contains("BICYCL")) {
+                    speed = 4.2; // ~15 km/h
+                } else if (tm.contains("TRANSIT")) {
+                    speed = 8.3; // ~30 km/h
+                }
+            }
+            double dur = dist / speed;
             List<RouteDto.CoordinateDto> interp = interpolatePoints(startLat, startLon, endLat, endLon, 8);
             alternativeRoutes.add(interp);
             distances.add(dist);

@@ -221,6 +221,8 @@ export default function RoutesScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchResponse, setSearchResponse] = useState<RouteSearchResponse | null>(null);
   const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'BALANCED' | 'SAFEST'>('SAFEST');
+  const [travelMode, setTravelMode] = useState<'WALKING' | 'DRIVING' | 'BICYCLING' | 'TRANSIT'>('WALKING');
+  const [routePreference, setRoutePreference] = useState<'SAFEST' | 'BALANCED' | 'FASTEST'>('SAFEST');
   const [gmapsTravelMode, setGmapsTravelMode] = useState<'drive' | 'walk' | 'cycle' | 'transit'>('walk');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapSegments, setHeatmapSegments] = useState<HeatmapSegment[]>([]);
@@ -320,7 +322,24 @@ export default function RoutesScreen() {
     setNavUserLocation(null);
   };
 
-  const handleOpenGoogleMaps = (travelMode?: 'drive' | 'walk' | 'cycle' | 'transit') => {
+  const extractRouteWaypoints = (coords: Coordinate[], maxWaypoints = 6): string => {
+    if (!coords || coords.length <= 2) return '';
+    const innerPoints = coords.slice(1, -1);
+    if (innerPoints.length === 0) return '';
+    if (innerPoints.length <= maxWaypoints) {
+      return innerPoints.map(p => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`).join('%7C');
+    }
+    const step = (innerPoints.length - 1) / (maxWaypoints - 1);
+    const waypoints: string[] = [];
+    for (let i = 0; i < maxWaypoints; i++) {
+      const idx = Math.round(i * step);
+      const pt = innerPoints[idx];
+      waypoints.push(`${pt.latitude.toFixed(5)},${pt.longitude.toFixed(5)}`);
+    }
+    return waypoints.join('%7C');
+  };
+
+  const handleOpenGoogleMaps = (targetMode?: 'FASTEST' | 'BALANCED' | 'SAFEST') => {
     const sLat = parseFloat(startLat);
     const sLon = parseFloat(startLon);
     const eLat = parseFloat(endLat);
@@ -331,21 +350,38 @@ export default function RoutesScreen() {
       return;
     }
 
-    const mode = travelMode || gmapsTravelMode;
-    const androidModeMap: Record<string, string> = { drive: 'd', walk: 'w', cycle: 'b', transit: 'r' };
-    const iosDirFlagMap: Record<string, string> = { drive: 'd', walk: 'w', cycle: 'b', transit: 'r' };
-    const webModeMap: Record<string, string> = { drive: 'driving', walk: 'walking', cycle: 'bicycling', transit: 'transit' };
+    const activeMode = targetMode || selectedMode;
+    const route = activeMode === 'FASTEST'
+      ? searchResponse?.fastestRoute
+      : activeMode === 'BALANCED'
+      ? searchResponse?.balancedRoute
+      : searchResponse?.safestRoute;
 
-    const originQuery = !isNaN(sLat) && !isNaN(sLon) ? `${sLat},${sLon}` : '';
-    const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${originQuery}&destination=${eLat},${eLon}&travelmode=${webModeMap[mode]}`;
-    const nativeUri = Platform.select({
-      android: `google.navigation:q=${eLat},${eLon}&mode=${androidModeMap[mode]}`,
-      ios: `maps://app?saddr=${originQuery}&daddr=${eLat},${eLon}&dirflg=${iosDirFlagMap[mode]}`,
-      default: webUrl,
-    });
+    const gmapsModeMap: Record<string, string> = {
+      WALKING: 'walking',
+      DRIVING: 'driving',
+      BICYCLING: 'bicycling',
+      TRANSIT: 'transit',
+    };
 
-    Linking.canOpenURL(nativeUri).then((can) => {
-      Linking.openURL(can ? nativeUri : webUrl);
+    const gMode = gmapsModeMap[travelMode] || 'walking';
+
+    // Extract intermediate waypoints from SafePath's computed route to force Google Maps through this exact path!
+    const routeCoords = route?.coordinates || [];
+    const waypointsParam = extractRouteWaypoints(routeCoords, 6);
+
+    const originQuery = !isNaN(sLat) && !isNaN(sLon)
+      ? `${sLat},${sLon}`
+      : (routeCoords[0] ? `${routeCoords[0].latitude},${routeCoords[0].longitude}` : '');
+    const destQuery = `${eLat},${eLon}`;
+
+    let webUrl = `https://www.google.com/maps/dir/?api=1&origin=${originQuery}&destination=${destQuery}&travelmode=${gMode}&dir_action=navigate`;
+    if (waypointsParam) {
+      webUrl += `&waypoints=${waypointsParam}`;
+    }
+
+    Linking.canOpenURL(webUrl).then((can) => {
+      Linking.openURL(can ? webUrl : webUrl);
     }).catch(() => {
       Linking.openURL(webUrl);
     });
@@ -547,8 +583,8 @@ export default function RoutesScreen() {
         startLon: sLon,
         endLat: eLat,
         endLon: eLon,
-        travelMode: 'WALKING',
-        routePreference: user?.routePreference || 'STANDARD',
+        travelMode: travelMode,
+        routePreference: routePreference,
       };
 
       const response = await api.post('/routes/search', payload);
@@ -566,21 +602,8 @@ export default function RoutesScreen() {
         }
       }
 
-      // Prioritize mode based on user's route preference
-      if (user?.routePreference === 'FASTEST') {
-        setSelectedMode('FASTEST');
-      } else if (
-        user?.routePreference === 'BALANCED' ||
-        user?.routePreference === 'SOLO_TRAVELLER' ||
-        user?.routePreference === 'TOURIST' ||
-        user?.routePreference === 'ELDERLY'
-      ) {
-        setSelectedMode('BALANCED');
-      } else if (response.data.safestRoute && response.data.safestRoute.safetyScore !== null) {
-        setSelectedMode('SAFEST');
-      } else {
-        setSelectedMode('FASTEST');
-      }
+      // Automatically select the route mode the user chose in the preference picker
+      setSelectedMode(routePreference);
     } catch (err: any) {
       const message =
         err.response?.data?.message ||
@@ -851,6 +874,74 @@ export default function RoutesScreen() {
           </View>
         )}
 
+        {/* Travel Mode Selector */}
+        <View style={styles.formSelectorSection}>
+          <Text style={styles.formSelectorLabel}>TRAVEL MODE</Text>
+          <View style={styles.modePillsRow}>
+            {([
+              { id: 'WALKING' as const, label: 'Walk', icon: 'walk-outline' as const },
+              { id: 'DRIVING' as const, label: 'Drive', icon: 'car-outline' as const },
+              { id: 'BICYCLING' as const, label: 'Cycle', icon: 'bicycle-outline' as const },
+              { id: 'TRANSIT' as const, label: 'Transit', icon: 'bus-outline' as const },
+            ] as const).map((m) => {
+              const isActive = travelMode === m.id;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  style={[styles.modePill, isActive && styles.modePillActive]}
+                  onPress={() => setTravelMode(m.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${m.label} travel mode`}
+                >
+                  <Ionicons
+                    name={m.icon}
+                    size={15}
+                    color={isActive ? '#FFFFFF' : '#475569'}
+                  />
+                  <Text style={[styles.modePillText, isActive && styles.modePillTextActive]}>
+                    {m.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Route Preference Selector */}
+        <View style={styles.formSelectorSection}>
+          <Text style={styles.formSelectorLabel}>ROUTING PREFERENCE</Text>
+          <View style={styles.prefPillsRow}>
+            {([
+              { id: 'SAFEST' as const, label: 'Safest Path', icon: 'shield-checkmark-outline' as const, color: '#10B981' },
+              { id: 'BALANCED' as const, label: 'Balanced', icon: 'options-outline' as const, color: '#6366F1' },
+              { id: 'FASTEST' as const, label: 'Fastest', icon: 'flash-outline' as const, color: '#0EA5E9' },
+            ] as const).map((p) => {
+              const isActive = routePreference === p.id;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[
+                    styles.prefPill,
+                    isActive && { backgroundColor: p.color, borderColor: p.color },
+                  ]}
+                  onPress={() => setRoutePreference(p.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.label} route preference`}
+                >
+                  <Ionicons
+                    name={p.icon}
+                    size={14}
+                    color={isActive ? '#FFFFFF' : '#475569'}
+                  />
+                  <Text style={[styles.prefPillText, isActive && styles.prefPillTextActive]}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Active Route Preference Pill */}
         <TouchableOpacity
           style={styles.prefBanner}
@@ -859,7 +950,7 @@ export default function RoutesScreen() {
           accessibilityLabel="View and adjust route preference"
         >
           <View style={styles.prefBannerLeft}>
-            <Text style={styles.prefBannerLabel}>Route Preference:</Text>
+            <Text style={styles.prefBannerLabel}>Profile Default:</Text>
             <View style={styles.prefBannerPill}>
               <Text style={styles.prefBannerValue}>{user?.routePreference || 'STANDARD'}</Text>
             </View>
@@ -1349,24 +1440,24 @@ export default function RoutesScreen() {
                   <Text style={styles.travelModeLabel}>Google Maps Mode</Text>
                   <View style={styles.travelModeRow}>
                     {([
-                      { id: 'walk', label: 'Walk', icon: 'walk-outline' as const },
-                      { id: 'drive', label: 'Drive', icon: 'car-outline' as const },
-                      { id: 'cycle', label: 'Cycle', icon: 'bicycle-outline' as const },
-                      { id: 'transit', label: 'Transit', icon: 'bus-outline' as const },
+                      { id: 'WALKING' as const, label: 'Walk', icon: 'walk-outline' as const },
+                      { id: 'DRIVING' as const, label: 'Drive', icon: 'car-outline' as const },
+                      { id: 'BICYCLING' as const, label: 'Cycle', icon: 'bicycle-outline' as const },
+                      { id: 'TRANSIT' as const, label: 'Transit', icon: 'bus-outline' as const },
                     ] as const).map((tm) => (
                       <TouchableOpacity
                         key={tm.id}
-                        style={[styles.travelModeChip, gmapsTravelMode === tm.id && styles.travelModeChipActive]}
-                        onPress={() => setGmapsTravelMode(tm.id)}
+                        style={[styles.travelModeChip, travelMode === tm.id && styles.travelModeChipActive]}
+                        onPress={() => setTravelMode(tm.id)}
                         accessibilityLabel={`${tm.label} mode`}
                       >
                         <Ionicons
                           name={tm.icon}
                           size={15}
-                          color={gmapsTravelMode === tm.id ? '#FFFFFF' : '#475569'}
+                          color={travelMode === tm.id ? '#FFFFFF' : '#475569'}
                           style={{ marginBottom: 2 }}
                         />
-                        <Text style={[styles.travelModeChipText, gmapsTravelMode === tm.id && styles.travelModeChipTextActive]}>
+                        <Text style={[styles.travelModeChipText, travelMode === tm.id && styles.travelModeChipTextActive]}>
                           {tm.label}
                         </Text>
                       </TouchableOpacity>
@@ -1381,12 +1472,20 @@ export default function RoutesScreen() {
                       onPress={handleStartNavigation}
                       accessibilityLabel="Start live navigation"
                     >
-                      <Text style={styles.primaryNavBtnText}>Start Live Safe Navigation</Text>
+                      <Text style={styles.primaryNavBtnText}>Start In-App Safe Guidance</Text>
                     </TouchableOpacity>
 
-                    {/* Show all 3 route options for Google Maps */}
+                    {/* Show all 3 route options for Google Maps with exact waypoints */}
                     <View style={styles.gmapsRoutesSection}>
-                      <Text style={styles.gmapsRoutesLabel}>Open in Google Maps ({['walk','drive','cycle','transit'].find(x=>x===gmapsTravelMode) ? gmapsTravelMode.charAt(0).toUpperCase()+gmapsTravelMode.slice(1) : 'Walk'})</Text>
+                      <View style={styles.gmapsHeaderRow}>
+                        <Ionicons name="navigate-circle-outline" size={16} color="#0EA5E9" />
+                        <Text style={styles.gmapsRoutesLabel}>
+                          Google Maps Voice Navigation ({travelMode.charAt(0) + travelMode.slice(1).toLowerCase()})
+                        </Text>
+                      </View>
+                      <Text style={styles.gmapsRoutesSub}>
+                        Pins SafePath waypoints directly into Google Maps turn-by-turn voice guidance:
+                      </Text>
                       <View style={styles.gmapsRoutesRow}>
                         {(['SAFEST', 'BALANCED', 'FASTEST'] as const).map((routeMode) => {
                           const r = routeMode === 'FASTEST' ? searchResponse?.fastestRoute : routeMode === 'BALANCED' ? searchResponse?.balancedRoute : searchResponse?.safestRoute;
@@ -1396,15 +1495,15 @@ export default function RoutesScreen() {
                             <TouchableOpacity
                               key={routeMode}
                               style={[styles.gmapsRouteChip, isCurrentSelected && { borderColor: getRouteColor(routeMode), borderWidth: 2 }]}
-                              onPress={() => handleOpenGoogleMaps(gmapsTravelMode)}
-                              accessibilityLabel={`Open ${routeMode} route in Google Maps`}
+                              onPress={() => handleOpenGoogleMaps(routeMode)}
+                              accessibilityLabel={`Open ${routeMode} route with voice turn-by-turn in Google Maps`}
                             >
                               <View style={[styles.gmapsRouteChipBadge, { backgroundColor: getRouteColor(routeMode) }]}>
                                 <Text style={styles.gmapsRouteChipBadgeText}>{routeMode}</Text>
                               </View>
                               <Text style={styles.gmapsRouteChipTime}>{formatDuration(r.durationSeconds)}</Text>
                               <Text style={styles.gmapsRouteChipDist}>{formatDistance(r.distanceMeters)}</Text>
-                              <Text style={styles.gmapsRouteChipOpen}>Navigate</Text>
+                              <Text style={styles.gmapsRouteChipOpen}>Voice Nav ›</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -2820,5 +2919,84 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     color: '#059669',
+  },
+  formSelectorSection: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  formSelectorLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  modePillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  modePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 4,
+  },
+  modePillActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  modePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modePillTextActive: {
+    color: '#FFFFFF',
+  },
+  prefPillsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  prefPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 4,
+  },
+  prefPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  prefPillTextActive: {
+    color: '#FFFFFF',
+  },
+  gmapsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  gmapsRoutesSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 8,
   },
 });
