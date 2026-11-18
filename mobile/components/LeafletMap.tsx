@@ -67,11 +67,11 @@ export interface LeafletMapProps {
 }
 
 const CATEGORY_ICONS: Record<string, { icon: string; bg: string; color: string }> = {
-  POLICE_STATION: { icon: '👮', bg: '#1D68BD', color: '#FFFFFF' },
-  HOSPITAL: { icon: '🏥', bg: '#DC2626', color: '#FFFFFF' },
-  PHARMACY: { icon: '💊', bg: '#059669', color: '#FFFFFF' },
-  PUBLIC_TRANSPORT: { icon: '🚇', bg: '#7C3AED', color: '#FFFFFF' },
-  OTHER: { icon: '📍', bg: '#D97706', color: '#FFFFFF' },
+  POLICE_STATION: { icon: 'P', bg: '#1E40AF', color: '#FFFFFF' },
+  HOSPITAL: { icon: 'H', bg: '#DC2626', color: '#FFFFFF' },
+  PHARMACY: { icon: 'Rx', bg: '#059669', color: '#FFFFFF' },
+  PUBLIC_TRANSPORT: { icon: 'T', bg: '#7C3AED', color: '#FFFFFF' },
+  OTHER: { icon: 'i', bg: '#D97706', color: '#FFFFFF' },
 };
 
 export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref) => {
@@ -266,16 +266,19 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
 
     /* Safe Zone Badges */
     .safe-zone-badge {
-      width: 30px;
-      height: 30px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 15px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 11px;
+      font-weight: 800;
+      color: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
       border: 2px solid #FFFFFF;
       cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       transition: transform 0.15s ease;
     }
     .safe-zone-badge:active {
@@ -402,19 +405,35 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
         L.marker([data.userLocation.latitude, data.userLocation.longitude], { icon: userIcon, zIndexOffset: 1000 }).addTo(userLayer);
       }
 
-      // 2. Heatmap Segments
+      // 2. Heatmap Segments — rendered as filled corridor buffers (not raw polylines)
       heatmapLayer.clearLayers();
       if (data.heatmapSegments && data.heatmapSegments.length) {
         data.heatmapSegments.forEach(function(seg) {
           var pts = seg.coordinates.map(function(c) { return [c.latitude, c.longitude]; });
           var isSelected = seg.isSelected;
           var isUnscored = seg.scoringStatus !== 'SCORED';
+          var baseColor = isSelected ? '#0EA5E9' : seg.colorHex;
+          var opacity = isSelected ? 0.85 : 0.55;
 
+          // Draw a thick blurred corridor polyline to simulate a filled buffer
+          // Shadow pass (wider, more transparent) — depth effect
+          L.polyline(pts, {
+            color: baseColor,
+            weight: isSelected ? 18 : 12,
+            opacity: 0.18,
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false,
+          }).addTo(heatmapLayer);
+
+          // Main corridor pass
           var poly = L.polyline(pts, {
-            color: isSelected ? '#007AFF' : seg.colorHex,
-            weight: isSelected ? 7 : 4,
-            opacity: 0.9,
-            dashArray: isUnscored ? '6, 8' : null
+            color: baseColor,
+            weight: isSelected ? 10 : 7,
+            opacity: opacity,
+            dashArray: isUnscored ? '5, 10' : null,
+            lineCap: 'round',
+            lineJoin: 'round',
           });
 
           poly.on('click', function(e) {
@@ -423,6 +442,20 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
           });
 
           poly.addTo(heatmapLayer);
+
+          // Place small circle dots at segment midpoint for density effect on longer segments
+          if (pts.length >= 2) {
+            var midIdx = Math.floor(pts.length / 2);
+            var midPt = pts[midIdx];
+            L.circleMarker(midPt, {
+              radius: isSelected ? 5 : 3.5,
+              color: '#FFFFFF',
+              weight: 1,
+              fillColor: baseColor,
+              fillOpacity: isUnscored ? 0.4 : 0.9,
+              interactive: false,
+            }).addTo(heatmapLayer);
+          }
         });
       }
 
@@ -430,13 +463,13 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
       safeZonesLayer.clearLayers();
       if (data.safeZones && data.safeZones.length) {
         data.safeZones.forEach(function(zone) {
-          var cat = zone.cat || { icon: '📍', bg: '#D97706' };
+          var cat = zone.cat || { icon: 'i', bg: '#D97706' };
           var iconHtml = '<div class="safe-zone-badge" style="background-color: ' + cat.bg + ';">' + cat.icon + '</div>';
           var szIcon = L.divIcon({
             className: '',
             html: iconHtml,
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
           });
 
           var marker = L.marker([zone.latitude, zone.longitude], { icon: szIcon });

@@ -22,27 +22,31 @@ export const Input = ({ label, error, style, ...props }: InputProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 8,
+    marginVertical: 6,
   },
   label: {
-    fontSize: 14,
-    color: '#3A3A3C',
-    marginBottom: 4,
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 6,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#C7C7CC',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#FAFAFA',
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    backgroundColor: '#F8FAFC',
+    color: '#0F172A',
   },
   inputError: {
-    borderColor: '#FF3B30',
+    borderColor: '#EF4444',
   },
   errorText: {
-    color: '#FF3B30',
+    color: '#EF4444',
     fontSize: 12,
     marginTop: 4,
   }

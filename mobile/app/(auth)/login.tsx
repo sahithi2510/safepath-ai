@@ -81,7 +81,7 @@ export default function LoginScreen() {
           style={styles.serverSettingsLink}
           onPress={() => setServerModalVisible(true)}
         >
-          <Text style={styles.serverSettingsText}>⚙️ Server Settings / Change API URL</Text>
+          <Text style={styles.serverSettingsText}>Server Settings / API URL</Text>
         </TouchableOpacity>
       </View>
 

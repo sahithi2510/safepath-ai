@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { LeafletMap, LeafletRoute } from '../../components/LeafletMap';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
@@ -81,13 +82,13 @@ export const generateRouteSteps = (
   mode: string = 'SAFEST'
 ): RouteStep[] => {
   if (!coords || coords.length < 2) return [];
-  const cleanStart = startLabel.replace(/^📍\s*/, '') || 'Starting Location';
-  const cleanEnd = endLabel.replace(/^📍\s*/, '') || 'Destination';
+  const cleanStart = startLabel.replace(/^[^\w\s]+\s*/, '') || 'Starting Location';
+  const cleanEnd = endLabel.replace(/^[^\w\s]+\s*/, '') || 'Destination';
 
   const steps: RouteStep[] = [];
   steps.push({
     id: 1,
-    icon: '🚶',
+    icon: '•',
     instruction: `Depart from ${cleanStart} along pedestrian walkway`,
     distanceMeters: 80,
     isLit: true,
@@ -107,13 +108,13 @@ export const generateRouteSteps = (
     const dLat = p2.latitude - p1.latitude;
     const angle = Math.atan2(dLon, dLat) * (180 / Math.PI);
 
-    let icon = '⬆️';
+    let icon = '↑';
     let turnText = 'Continue straight along';
     if (angle > 35 && angle < 145) {
-      icon = '↱';
+      icon = '↗';
       turnText = 'Turn right onto';
     } else if (angle < -35 && angle > -145) {
-      icon = '↰';
+      icon = '↖';
       turnText = 'Turn left onto';
     }
 
@@ -135,7 +136,7 @@ export const generateRouteSteps = (
 
   steps.push({
     id: steps.length + 1,
-    icon: '🏁',
+    icon: '■',
     instruction: `Arrive at destination: ${cleanEnd}`,
     distanceMeters: 40,
     isLit: true,
@@ -216,6 +217,7 @@ export default function RoutesScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchResponse, setSearchResponse] = useState<RouteSearchResponse | null>(null);
   const [selectedMode, setSelectedMode] = useState<'FASTEST' | 'BALANCED' | 'SAFEST'>('SAFEST');
+  const [gmapsTravelMode, setGmapsTravelMode] = useState<'drive' | 'walk' | 'cycle' | 'transit'>('walk');
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapSegments, setHeatmapSegments] = useState<HeatmapSegment[]>([]);
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
@@ -267,7 +269,7 @@ export default function RoutesScreen() {
       setIsNavigating(true);
       setNavRemainingDistance(route.distanceMeters);
       setNavRemainingTime(route.durationSeconds);
-      const cleanDest = endName.replace(/^📍\s*/, '') || 'Destination';
+      const cleanDest = endName.replace(/^[^\w\s]+\s*/, '') || 'Destination';
       setNavInstruction(`Follow the ${selectedMode.toLowerCase()} path towards ${cleanDest}`);
 
       // Start live GPS tracking
@@ -289,7 +291,7 @@ export default function RoutesScreen() {
           setNavRemainingTime(Math.round(dist / 1.3));
 
           if (dist < 25) {
-            setNavInstruction('🎉 You have arrived at your destination!');
+            setNavInstruction('Arrived at your destination.');
           } else {
             setNavInstruction(`Continue following ${selectedMode.toLowerCase()} corridor to ${cleanDest}`);
           }
@@ -309,7 +311,7 @@ export default function RoutesScreen() {
     setNavUserLocation(null);
   };
 
-  const handleOpenGoogleMaps = () => {
+  const handleOpenGoogleMaps = (travelMode?: 'drive' | 'walk' | 'cycle' | 'transit') => {
     const sLat = parseFloat(startLat);
     const sLon = parseFloat(startLon);
     const eLat = parseFloat(endLat);
@@ -320,20 +322,21 @@ export default function RoutesScreen() {
       return;
     }
 
+    const mode = travelMode || gmapsTravelMode;
+    const androidModeMap: Record<string, string> = { drive: 'd', walk: 'w', cycle: 'b', transit: 'r' };
+    const iosDirFlagMap: Record<string, string> = { drive: 'd', walk: 'w', cycle: 'b', transit: 'r' };
+    const webModeMap: Record<string, string> = { drive: 'driving', walk: 'walking', cycle: 'bicycling', transit: 'transit' };
+
     const originQuery = !isNaN(sLat) && !isNaN(sLon) ? `${sLat},${sLon}` : '';
-    const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${originQuery}&destination=${eLat},${eLon}&travelmode=walking`;
+    const webUrl = `https://www.google.com/maps/dir/?api=1&origin=${originQuery}&destination=${eLat},${eLon}&travelmode=${webModeMap[mode]}`;
     const nativeUri = Platform.select({
-      android: `google.navigation:q=${eLat},${eLon}&mode=w`,
-      ios: `maps://app?saddr=${originQuery}&daddr=${eLat},${eLon}&dirflg=w`,
+      android: `google.navigation:q=${eLat},${eLon}&mode=${androidModeMap[mode]}`,
+      ios: `maps://app?saddr=${originQuery}&daddr=${eLat},${eLon}&dirflg=${iosDirFlagMap[mode]}`,
       default: webUrl,
     });
 
     Linking.canOpenURL(nativeUri).then((can) => {
-      if (can) {
-        Linking.openURL(nativeUri);
-      } else {
-        Linking.openURL(webUrl);
-      }
+      Linking.openURL(can ? nativeUri : webUrl);
     }).catch(() => {
       Linking.openURL(webUrl);
     });
@@ -360,7 +363,7 @@ export default function RoutesScreen() {
       setStartLon(lon.toString());
 
       const placeName = await reverseGeocode(lat, lon);
-      setStartName(`📍 ${placeName}`);
+      setStartName(placeName);
       setErrorMsg(null);
     } catch (err: any) {
       console.warn('GPS location lookup failed:', err);
@@ -501,7 +504,7 @@ export default function RoutesScreen() {
     try {
       // If user typed custom name without selecting a suggestion, geocode on the fly
       if (isNaN(sLat) || isNaN(sLon)) {
-        const cleanName = startName.replace(/^📍\s*/, '');
+        const cleanName = startName.replace(/^[^\w\s]+\s*/, '');
         const places = await searchPlaces(cleanName);
         if (places.length > 0) {
           sLat = places[0].latitude;
@@ -516,7 +519,7 @@ export default function RoutesScreen() {
       }
 
       if (isNaN(eLat) || isNaN(eLon)) {
-        const cleanEnd = endName.replace(/^📍\s*/, '');
+        const cleanEnd = endName.replace(/^[^\w\s]+\s*/, '');
         const places = await searchPlaces(cleanEnd, sLat, sLon);
         if (places.length > 0) {
           eLat = places[0].latitude;
@@ -641,7 +644,7 @@ export default function RoutesScreen() {
         <View style={styles.placeInputGroup}>
           <Text style={styles.inputGroupLabel}>Start Location</Text>
           <View style={styles.placeInputRow}>
-            <Text style={styles.placeDot}>🟢</Text>
+            <View style={[styles.placeDotNode, { backgroundColor: '#10B981' }]} />
             <TextInput
               style={styles.placeTextInput}
               placeholder="Origin address or place..."
@@ -672,7 +675,7 @@ export default function RoutesScreen() {
               {locatingUser ? (
                 <ActivityIndicator size="small" color="#007AFF" />
               ) : (
-                <Text style={styles.currentLocBtnText}>📍 GPS</Text>
+                <Text style={styles.currentLocBtnText}>GPS</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -686,7 +689,7 @@ export default function RoutesScreen() {
             onPress={handleSwapLocations}
             accessibilityLabel="Swap start and destination"
           >
-            <Text style={styles.swapButtonText}>⇅ Swap</Text>
+            <Text style={styles.swapButtonText}>Swap</Text>
           </TouchableOpacity>
           <View style={styles.swapDivider} />
         </View>
@@ -695,7 +698,7 @@ export default function RoutesScreen() {
         <View style={styles.placeInputGroup}>
           <Text style={styles.inputGroupLabel}>Destination</Text>
           <View style={styles.placeInputRow}>
-            <Text style={styles.placeDot}>🔴</Text>
+            <View style={[styles.placeDotNode, { backgroundColor: '#EF4444' }]} />
             <TextInput
               style={styles.placeTextInput}
               placeholder="Search destination or place..."
@@ -735,7 +738,7 @@ export default function RoutesScreen() {
                 style={styles.suggestionItem}
                 onPress={() => handleSelectSuggestion(item)}
               >
-                <Text style={styles.suggestionIcon}>📍</Text>
+                <View style={styles.suggestionDotNode} />
                 <View style={styles.suggestionTextContainer}>
                   <Text style={styles.suggestionTitle} numberOfLines={1}>
                     {item.name}
@@ -758,7 +761,7 @@ export default function RoutesScreen() {
               onPress={handleUseCurrentLocation}
               accessibilityLabel="Quick GPS current location"
             >
-              <Text style={styles.presetChipGpsText}>📍 Current Location</Text>
+              <Text style={styles.presetChipGpsText}>Current Location</Text>
             </TouchableOpacity>
             {PRESET_PLACES.map((preset, index) => (
               <TouchableOpacity
@@ -882,7 +885,7 @@ export default function RoutesScreen() {
           {!searchResponse.mlServiceAvailable && (
             <View style={styles.mlWarningBanner} accessibilityRole="alert">
               <Text style={styles.mlWarningText}>
-                ⚠️ ML Risk Service Offline: Displaying non-ML topological routes. Safety scores are
+                ML Risk Service Offline: Displaying non-ML topological routes. Safety scores are
                 UNSCORED.
               </Text>
             </View>
@@ -895,8 +898,8 @@ export default function RoutesScreen() {
           >
             <Text style={searchResponse.weatherContextAvailable ? styles.weatherActiveText : styles.weatherInactiveText}>
               {searchResponse.weatherContextAvailable
-                ? '🌦️ Weather Context Active: Environmental parameters (precipitation, visibility) integrated into risk inference.'
-                : '☁️ Weather Context Inactive: Standard environmental defaults applied (does not block routing).'}
+                ? 'Weather Context Active: Environmental parameters (precipitation, visibility) integrated into risk inference.'
+                : 'Weather Context Inactive: Standard environmental defaults applied (does not block routing).'}
             </Text>
           </View>
 
@@ -921,6 +924,18 @@ export default function RoutesScreen() {
 
           {/* 3-Way Route Selector Cards */}
           <Text style={styles.sectionTitle}>Select Route Option</Text>
+          {/* Preference indicator banner */}
+          {user?.routePreference && user.routePreference !== 'STANDARD' && (
+            <View style={styles.prefIndicatorBanner}>
+              <View style={[styles.prefIndicatorDot, { backgroundColor: getRouteColor(
+                user.routePreference === 'FASTEST' ? 'FASTEST' :
+                ['BALANCED', 'SOLO_TRAVELLER', 'TOURIST', 'ELDERLY'].includes(user.routePreference) ? 'BALANCED' : 'SAFEST'
+              ) }]} />
+              <Text style={styles.prefIndicatorText}>
+                Your preference ({user.routePreference}) — highlighted below
+              </Text>
+            </View>
+          )}
           <View style={styles.optionsRow}>
             {(['FASTEST', 'BALANCED', 'SAFEST'] as const).map((mode) => {
               const r =
@@ -934,72 +949,68 @@ export default function RoutesScreen() {
 
               const isSelected = selectedMode === mode;
               const isDuplicate = r.isDistinct === false;
+              const isPreferred = user?.routePreference === mode ||
+                (mode === 'BALANCED' && ['SOLO_TRAVELLER', 'TOURIST', 'ELDERLY'].includes(user?.routePreference || ''));
+              const routeColor = getRouteColor(mode);
+
+              // Compute comparative stats for all 3 routes
+              const fastest = searchResponse.fastestRoute;
+              const safest = searchResponse.safestRoute;
+              const timeDiff = fastest?.durationSeconds && r.durationSeconds
+                ? Math.round((r.durationSeconds - fastest.durationSeconds) / 60)
+                : null;
+              const safetyDiff = safest?.safetyScore !== null && safest?.safetyScore !== undefined && r.safetyScore !== null && r.safetyScore !== undefined
+                ? Math.round(r.safetyScore - (fastest?.safetyScore ?? r.safetyScore))
+                : null;
 
               return (
                 <TouchableOpacity
                   key={mode}
                   style={[
                     styles.optionCard,
-                    isSelected && { borderColor: getRouteColor(mode), borderWidth: 2 },
+                    isSelected && { borderColor: routeColor, borderWidth: 2, shadowOpacity: 0.12 },
+                    isPreferred && !isSelected && styles.optionCardPreferred,
                   ]}
                   onPress={() => setSelectedMode(mode)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${mode} route option, ${formatDuration(
-                    r.durationSeconds
-                  )}, ${formatDistance(r.distanceMeters)}`}
+                  accessibilityLabel={`${mode} route, ${formatDuration(r.durationSeconds)}, ${formatDistance(r.distanceMeters)}`}
                   accessibilityState={{ selected: isSelected }}
                 >
-                  <View
-                    style={[
-                      styles.modeBadge,
-                      { backgroundColor: isSelected ? getRouteColor(mode) : '#E5E5EA' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.modeBadgeText,
-                        { color: isSelected ? '#FFFFFF' : '#1C1C1E' },
-                      ]}
-                    >
-                      {mode}
-                    </Text>
+                  {/* Preferred badge */}
+                  {isPreferred && (
+                    <View style={[styles.preferredBadge, { backgroundColor: routeColor }]}>
+                      <Text style={styles.preferredBadgeText}>YOUR PICK</Text>
+                    </View>
+                  )}
+
+                  <View style={[styles.modeBadge, { backgroundColor: isSelected ? routeColor : '#F1F5F9' }]}>
+                    <Text style={[styles.modeBadgeText, { color: isSelected ? '#FFFFFF' : '#374151' }]}>{mode}</Text>
                   </View>
 
-                  {mode === 'BALANCED' &&
-                    user?.routePreference &&
-                    ['SOLO_TRAVELLER', 'TOURIST', 'ELDERLY'].includes(user.routePreference) && (
-                      <Text style={styles.personalizedSubText}>
-                        {user.routePreference === 'SOLO_TRAVELLER'
-                          ? 'Solo'
-                          : user.routePreference === 'TOURIST'
-                          ? 'Tourist'
-                          : 'Elderly'}
-                      </Text>
-                    )}
-
-                  <Text style={styles.optionDuration}>{formatDuration(r.durationSeconds)}</Text>
+                  <Text style={[styles.optionDuration, isSelected && { color: routeColor }]}>{formatDuration(r.durationSeconds)}</Text>
                   <Text style={styles.optionDistance}>{formatDistance(r.distanceMeters)}</Text>
 
-                  {/* Safety Score / Unscored Badge */}
+                  {/* Safety Score */}
                   {r.safetyScore !== null && r.safetyScore !== undefined ? (
-                    <View
-                      style={[
-                        styles.safetyBadge,
-                        { backgroundColor: getRiskBadgeColor(r.riskLevel) },
-                      ]}
-                    >
-                      <Text style={styles.safetyBadgeText}>{Math.round(r.safetyScore)}%</Text>
+                    <View style={[styles.safetyBadge, { backgroundColor: getRiskBadgeColor(r.riskLevel) }]}>
+                      <Text style={styles.safetyBadgeText}>{Math.round(r.safetyScore)}/100</Text>
                     </View>
                   ) : (
-                    <View style={[styles.safetyBadge, { backgroundColor: '#8E8E93' }]}>
+                    <View style={[styles.safetyBadge, { backgroundColor: '#94A3B8' }]}>
                       <Text style={styles.safetyBadgeText}>UNSCORED</Text>
                     </View>
                   )}
 
+                  {/* Comparative delta tags */}
+                  {mode !== 'FASTEST' && timeDiff !== null && timeDiff > 0 && (
+                    <Text style={styles.deltaTag}>+{timeDiff} min</Text>
+                  )}
+                  {mode !== 'FASTEST' && safetyDiff !== null && safetyDiff > 0 && (
+                    <Text style={[styles.deltaTag, { color: '#10B981' }]}>+{safetyDiff} safety</Text>
+                  )}
+
                   {isDuplicate && (
-                    <Text style={styles.duplicateTag}>
-                      {r.duplicateOf ? `Same as ${r.duplicateOf}` : 'Duplicate'}
-                    </Text>
+                    <Text style={styles.duplicateTag}>{r.duplicateOf ? `Same as ${r.duplicateOf}` : 'Duplicate'}</Text>
                   )}
                 </TouchableOpacity>
               );
@@ -1027,12 +1038,12 @@ export default function RoutesScreen() {
                 {loadingHeatmap
                   ? 'Loading Heatmap...'
                   : showHeatmap
-                  ? `🔥 Heatmap Overlay: ON ${heatmapSegments.length ? `(${heatmapSegments.length})` : ''}`
-                  : '⚪ Heatmap Overlay: OFF'}
+                  ? `Heatmap Overlay: ON ${heatmapSegments.length ? `(${heatmapSegments.length})` : ''}`
+                  : 'Heatmap Overlay: OFF'}
               </Text>
             </TouchableOpacity>
             {showHeatmap && heatmapSegments.length > 0 && heatmapSegments[0]?.isSyntheticDemonstration && (
-              <Text style={styles.demoWatermarkText}>⚠️ MOCK ROAD DATA</Text>
+              <Text style={styles.demoWatermarkText}>MOCK ROAD DATA</Text>
             )}
           </View>
 
@@ -1041,7 +1052,7 @@ export default function RoutesScreen() {
             <Card style={styles.navHudCard}>
               <View style={styles.navHudHeader}>
                 <View style={styles.navHudBadge}>
-                  <Text style={styles.navHudBadgeDot}>🟢</Text>
+                  <View style={styles.navHudBadgeDotNode} />
                   <Text style={styles.navHudBadgeText}>LIVE SAFE GUIDANCE</Text>
                 </View>
                 <View style={[styles.navRiskPill, { backgroundColor: getRouteColor(selectedMode) }]}>
@@ -1077,10 +1088,10 @@ export default function RoutesScreen() {
               <View style={styles.navBtnRow}>
                 <TouchableOpacity
                   style={styles.navGoogleBtn}
-                  onPress={handleOpenGoogleMaps}
+                  onPress={() => handleOpenGoogleMaps()}
                   accessibilityLabel="Open voice turn-by-turn navigation in Google Maps"
                 >
-                  <Text style={styles.navGoogleBtnText}>🧭 Google Maps Voice</Text>
+                  <Text style={styles.navGoogleBtnText}>Google Maps Voice</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1088,7 +1099,7 @@ export default function RoutesScreen() {
                   onPress={handleStopNavigation}
                   accessibilityLabel="End current navigation"
                 >
-                  <Text style={styles.navStopBtnText}>🛑 End Guidance</Text>
+                  <Text style={styles.navStopBtnText}>End Guidance</Text>
                 </TouchableOpacity>
               </View>
             </Card>
@@ -1157,7 +1168,7 @@ export default function RoutesScreen() {
               accessibilityRole="button"
               accessibilityLabel="Recenter map on your location"
             >
-              <Text style={styles.routeRecenterIcon}>🎯</Text>
+              <Ionicons name="locate" size={20} color="#0EA5E9" />
             </TouchableOpacity>
           </View>
 
@@ -1236,6 +1247,36 @@ export default function RoutesScreen() {
               )}
 
               <View style={styles.actionButtonsContainer}>
+                {/* Travel Mode Picker for Google Maps */}
+                <View style={styles.travelModeSection}>
+                  <Text style={styles.travelModeLabel}>Google Maps Mode</Text>
+                  <View style={styles.travelModeRow}>
+                    {([
+                      { id: 'walk', label: 'Walk', icon: 'walk-outline' as const },
+                      { id: 'drive', label: 'Drive', icon: 'car-outline' as const },
+                      { id: 'cycle', label: 'Cycle', icon: 'bicycle-outline' as const },
+                      { id: 'transit', label: 'Transit', icon: 'bus-outline' as const },
+                    ] as const).map((tm) => (
+                      <TouchableOpacity
+                        key={tm.id}
+                        style={[styles.travelModeChip, gmapsTravelMode === tm.id && styles.travelModeChipActive]}
+                        onPress={() => setGmapsTravelMode(tm.id)}
+                        accessibilityLabel={`${tm.label} mode`}
+                      >
+                        <Ionicons
+                          name={tm.icon}
+                          size={15}
+                          color={gmapsTravelMode === tm.id ? '#FFFFFF' : '#475569'}
+                          style={{ marginBottom: 2 }}
+                        />
+                        <Text style={[styles.travelModeChipText, gmapsTravelMode === tm.id && styles.travelModeChipTextActive]}>
+                          {tm.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
                 {!isNavigating ? (
                   <>
                     <TouchableOpacity
@@ -1243,16 +1284,35 @@ export default function RoutesScreen() {
                       onPress={handleStartNavigation}
                       accessibilityLabel="Start live navigation"
                     >
-                      <Text style={styles.primaryNavBtnText}>🚶 Start Live Safe Navigation</Text>
+                      <Text style={styles.primaryNavBtnText}>Start Live Safe Navigation</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.secondaryMapsBtn}
-                      onPress={handleOpenGoogleMaps}
-                      accessibilityLabel="Open turn-by-turn navigation in Google Maps"
-                    >
-                      <Text style={styles.secondaryMapsBtnText}>🧭 Open in Google Maps (Spoken Voice)</Text>
-                    </TouchableOpacity>
+                    {/* Show all 3 route options for Google Maps */}
+                    <View style={styles.gmapsRoutesSection}>
+                      <Text style={styles.gmapsRoutesLabel}>Open in Google Maps ({['walk','drive','cycle','transit'].find(x=>x===gmapsTravelMode) ? gmapsTravelMode.charAt(0).toUpperCase()+gmapsTravelMode.slice(1) : 'Walk'})</Text>
+                      <View style={styles.gmapsRoutesRow}>
+                        {(['SAFEST', 'BALANCED', 'FASTEST'] as const).map((routeMode) => {
+                          const r = routeMode === 'FASTEST' ? searchResponse?.fastestRoute : routeMode === 'BALANCED' ? searchResponse?.balancedRoute : searchResponse?.safestRoute;
+                          if (!r) return null;
+                          const isCurrentSelected = selectedMode === routeMode;
+                          return (
+                            <TouchableOpacity
+                              key={routeMode}
+                              style={[styles.gmapsRouteChip, isCurrentSelected && { borderColor: getRouteColor(routeMode), borderWidth: 2 }]}
+                              onPress={() => handleOpenGoogleMaps(gmapsTravelMode)}
+                              accessibilityLabel={`Open ${routeMode} route in Google Maps`}
+                            >
+                              <View style={[styles.gmapsRouteChipBadge, { backgroundColor: getRouteColor(routeMode) }]}>
+                                <Text style={styles.gmapsRouteChipBadgeText}>{routeMode}</Text>
+                              </View>
+                              <Text style={styles.gmapsRouteChipTime}>{formatDuration(r.durationSeconds)}</Text>
+                              <Text style={styles.gmapsRouteChipDist}>{formatDistance(r.distanceMeters)}</Text>
+                              <Text style={styles.gmapsRouteChipOpen}>Navigate</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
                   </>
                 ) : (
                   <TouchableOpacity
@@ -1260,7 +1320,7 @@ export default function RoutesScreen() {
                     onPress={handleStopNavigation}
                     accessibilityLabel="Stop active navigation"
                   >
-                    <Text style={styles.stopNavBtnText}>🛑 Stop Live Navigation</Text>
+                    <Text style={styles.stopNavBtnText}>Stop Live Navigation</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -1277,7 +1337,7 @@ export default function RoutesScreen() {
                   accessibilityLabel="Toggle turn-by-turn walking directions"
                 >
                   <View style={styles.directionsHeaderLeft}>
-                    <Text style={styles.directionsHeaderTitle}>📜 Step-by-Step Guidance</Text>
+                    <Text style={styles.directionsHeaderTitle}>Step-by-Step Guidance</Text>
                     <Text style={styles.directionsHeaderSubtitle}>
                       {generateRouteSteps(selectedRoute.coordinates, startName, endName, selectedRoute.litSegmentsPercentage, selectedMode).length} walking steps • {selectedRoute.litSegmentsPercentage || 80}% lit
                     </Text>
@@ -1299,7 +1359,7 @@ export default function RoutesScreen() {
                             <Text style={styles.stepDistance}>{step.distanceMeters} m</Text>
                             <View style={[styles.stepLitBadge, { backgroundColor: step.isLit ? '#E8F5E9' : '#FFF3E0' }]}>
                               <Text style={[styles.stepLitText, { color: step.isLit ? '#2E7D32' : '#E65100' }]}>
-                                {step.isLit ? '💡 Well Lit' : '🌑 Dim/Unlit'}
+                                {step.isLit ? 'Well Lit' : 'Dim/Unlit'}
                               </Text>
                             </View>
                           </View>
@@ -1316,7 +1376,7 @@ export default function RoutesScreen() {
               <Card style={styles.rerouteSimulationCard}>
                 <View style={styles.simulationHeader}>
                   <View style={styles.simulationTitleCol}>
-                    <Text style={styles.simulationTitle}>⚡ Community Hazard Impact</Text>
+                    <Text style={styles.simulationTitle}>Community Hazard Impact</Text>
                     <Text style={styles.simulationSubtitle}>
                       Simulate how reporting a hazard dynamically steers SafePath AI routing
                     </Text>
@@ -1332,7 +1392,7 @@ export default function RoutesScreen() {
                 {simulateHazardReroute ? (
                   <View style={styles.simulationActiveContent}>
                     <View style={styles.hazardAlertBanner}>
-                      <Text style={styles.hazardAlertIcon}>⚠️</Text>
+                      <View style={styles.hazardAlertDotNode} />
                       <View style={styles.hazardAlertTextCol}>
                         <Text style={styles.hazardAlertTitle}>Verified Hazard: Alleyway Risk</Text>
                         <Text style={styles.hazardAlertDesc}>
@@ -1343,7 +1403,7 @@ export default function RoutesScreen() {
 
                     <View style={styles.comparisonBox}>
                       <View style={styles.comparisonCol}>
-                        <Text style={styles.comparisonLabel}>❌ BEFORE REPORT (Fastest)</Text>
+                        <Text style={styles.comparisonLabel}>BEFORE REPORT (Fastest)</Text>
                         <Text style={styles.comparisonValue}>Direct Alley</Text>
                         <Text style={styles.comparisonSafetyBad}>Safety: 48/100 (Unsafe)</Text>
                         <Text style={styles.comparisonDetail}>Dark, unlit corridor</Text>
@@ -1352,7 +1412,7 @@ export default function RoutesScreen() {
                       <View style={styles.comparisonDivider} />
 
                       <View style={styles.comparisonCol}>
-                        <Text style={styles.comparisonLabel}>✅ AFTER REPORT (SafePath)</Text>
+                        <Text style={styles.comparisonLabel}>AFTER REPORT (SafePath)</Text>
                         <Text style={styles.comparisonValue}>Main Lit Avenue</Text>
                         <Text style={styles.comparisonSafetyGood}>Safety: 88/100 (+40 pts)</Text>
                         <Text style={styles.comparisonDetail}>Detour: +140m (+1.5 min)</Text>
@@ -1360,7 +1420,7 @@ export default function RoutesScreen() {
                     </View>
 
                     <Text style={styles.simulationSummaryNote}>
-                      🛡️ SafePath AI multi-objective A* algorithm penalizes high-risk edges by factor γ=0.8, automatically guiding pedestrians through verified safe and lit roads.
+                      SafePath AI multi-objective A* algorithm penalizes high-risk edges by factor γ=0.8, automatically guiding pedestrians through verified safe and lit roads.
                     </Text>
                   </View>
                 ) : (
@@ -1817,6 +1877,41 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5EA',
     paddingHorizontal: 10,
     paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+  },
+  placeDotNode: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  suggestionDotNode: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
+    marginRight: 10,
+  },
+  navHudBadgeDotNode: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34C759',
+    marginRight: 6,
+  },
+  recenterRingSmall: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#0EA5E9',
+  },
+  hazardAlertDotNode: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EA580C',
+    marginRight: 8,
+    marginTop: 4,
   },
   placeDot: {
     fontSize: 14,
@@ -2341,5 +2436,149 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 8,
     lineHeight: 16,
+  },
+  // Travel mode picker
+  travelModeSection: {
+    marginBottom: 12,
+  },
+  travelModeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  travelModeRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  travelModeChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  travelModeChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  travelModeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  travelModeChipTextActive: {
+    color: '#FFFFFF',
+  },
+  // Google Maps 3-route section
+  gmapsRoutesSection: {
+    marginTop: 4,
+  },
+  gmapsRoutesLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  gmapsRoutesRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  gmapsRouteChip: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  gmapsRouteChipBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  gmapsRouteChipBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  gmapsRouteChipTime: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 1,
+  },
+  gmapsRouteChipDist: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  gmapsRouteChipOpen: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0EA5E9',
+    textDecorationLine: 'underline',
+  },
+  prefIndicatorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    gap: 6,
+  },
+  prefIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  prefIndicatorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  optionCardPreferred: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  preferredBadge: {
+    position: 'absolute',
+    top: -8,
+    alignSelf: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    zIndex: 1,
+  },
+  preferredBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  deltaTag: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 2,
   },
 });

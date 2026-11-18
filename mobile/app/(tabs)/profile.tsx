@@ -84,7 +84,7 @@ export default function ProfileScreen() {
         
         {isAdmin && (
           <Button 
-            title="👑 Admin: Manage User Roles" 
+            title="Admin: Manage User Roles" 
             variant="primary" 
             onPress={() => router.push('/admin-users')} 
             style={styles.adminBtn}
@@ -92,7 +92,7 @@ export default function ProfileScreen() {
         )}
         {isModerator && (
           <Button 
-            title="🛡️ Moderator Dashboard" 
+            title="Moderator Dashboard" 
             variant="primary" 
             onPress={() => router.push('/moderator-dashboard')} 
             style={styles.moderatorBtn}
@@ -114,7 +114,7 @@ export default function ProfileScreen() {
           onPress={() => router.push('/settings')} 
         />
         <Button 
-          title="🌐 Server & Cloud API Settings" 
+          title="Server & Cloud API Settings" 
           variant="secondary" 
           onPress={() => setServerModalVisible(true)} 
         />
@@ -138,7 +138,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F8FAFC',
     padding: 16,
     paddingTop: 60,
   },
@@ -147,90 +147,98 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '800',
     marginBottom: 20,
-    color: '#1C1C1E',
+    color: '#0F172A',
+    letterSpacing: -0.4,
   },
   profileCard: {
     alignItems: 'center',
     paddingVertical: 24,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#007AFF',
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   avatarText: {
     color: '#FFF',
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 28,
+    fontWeight: '800',
   },
   name: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1C1C1E',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 4,
   },
   email: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 14,
+    color: '#64748B',
     marginBottom: 4,
   },
   phone: {
-    fontSize: 16,
-    color: '#8E8E93',
+    fontSize: 14,
+    color: '#64748B',
   },
   preferenceBadgeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 12,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 14,
     gap: 8,
   },
   preferenceLabel: {
-    fontSize: 13,
-    color: '#636366',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
   },
   preferencePill: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0EA5E9',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   preferencePillText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   settingsSection: {
     marginTop: 24,
+    gap: 2,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 12,
     paddingHorizontal: 4,
+    letterSpacing: -0.2,
   },
   logoutButton: {
-    marginTop: 'auto',
-    marginBottom: 32,
+    marginTop: 24,
+    marginBottom: 36,
   },
   adminBtn: {
-    backgroundColor: '#7C3AED',
-    marginBottom: 10,
+    backgroundColor: '#0F172A',
+    marginBottom: 8,
   },
   moderatorBtn: {
-    backgroundColor: '#059669',
-    marginBottom: 10,
+    backgroundColor: '#1E3A8A',
+    marginBottom: 8,
   },
 });

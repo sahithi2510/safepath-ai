@@ -47,49 +47,49 @@ const CATEGORIES: CategoryOption[] = [
   {
     type: 'POOR_LIGHTING',
     label: 'Poor Lighting',
-    icon: '🔦',
+    icon: 'Dim',
     description: 'Dark area, dim or inadequate street lighting',
   },
   {
     type: 'BROKEN_STREETLIGHT',
-    label: 'Broken Streetlight',
-    icon: '💡',
+    label: 'Broken Lamp',
+    icon: 'Lamp',
     description: 'Non-functional or damaged street lamps',
   },
   {
     type: 'ROAD_BLOCKAGE',
     label: 'Road Blockage',
-    icon: '🚧',
+    icon: 'Block',
     description: 'Debris, fallen trees, or construction hazard',
   },
   {
     type: 'UNSAFE_ROAD',
     label: 'Unsafe Road',
-    icon: '⚠️',
+    icon: 'Road',
     description: 'Dangerous walkway, potholes, or lack of sidewalk',
   },
   {
     type: 'CROWD_ISSUE',
     label: 'Crowd Concern',
-    icon: '👥',
+    icon: 'Crowd',
     description: 'Overcrowding, brawl, or unruly gathering',
   },
   {
     type: 'SUSPICIOUS_ACTIVITY',
     label: 'Suspicious Activity',
-    icon: '👁️',
+    icon: 'Alert',
     description: 'Lurking or unusual behavior',
   },
   {
     type: 'HARASSMENT',
     label: 'Harassment',
-    icon: '🛑',
+    icon: 'Safety',
     description: 'Verbal harassment, stalking, or intimidation',
   },
   {
     type: 'OTHER',
     label: 'Other Concern',
-    icon: '📌',
+    icon: 'Other',
     description: 'Other neighborhood safety issue',
   },
 ];
@@ -371,7 +371,6 @@ export default function ReportsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Emergency Disclaimer Banner */}
       <View style={styles.emergencyBanner} accessibilityRole="alert">
-        <Text style={styles.emergencyIcon}>🚨</Text>
         <View style={styles.emergencyTextCol}>
           <Text style={styles.emergencyTitle}>EMERGENCY NOTICE</Text>
           <Text style={styles.emergencyDesc}>
@@ -383,7 +382,6 @@ export default function ReportsScreen() {
       {/* In-App Notification Alert Banner */}
       {unreadNotifications.length > 0 && (
         <View style={styles.notificationAlertBanner} accessibilityRole="alert">
-          <Text style={styles.notificationAlertIcon}>🔔</Text>
           <View style={styles.notificationAlertContent}>
             <Text style={styles.notificationAlertTitle}>
               {unreadNotifications[0].title}
@@ -415,7 +413,7 @@ export default function ReportsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Open notifications"
           >
-            <Text style={styles.notificationBellIcon}>🔔</Text>
+            <Text style={styles.notificationBellText}>Alerts</Text>
             {unreadNotifications.length > 0 && (
               <View style={styles.bellBadge}>
                 <Text style={styles.bellBadgeText}>{unreadNotifications.length}</Text>
@@ -440,7 +438,7 @@ export default function ReportsScreen() {
           accessibilityState={{ selected: activeTab === 'SUBMIT' }}
         >
           <Text style={[styles.tabBtnText, activeTab === 'SUBMIT' && styles.tabBtnTextActive]}>
-            📝 Submit
+            Submit
           </Text>
         </TouchableOpacity>
 
@@ -451,7 +449,7 @@ export default function ReportsScreen() {
           accessibilityState={{ selected: activeTab === 'HISTORY' }}
         >
           <Text style={[styles.tabBtnText, activeTab === 'HISTORY' && styles.tabBtnTextActive]}>
-            📋 My Reports
+            My Reports
           </Text>
         </TouchableOpacity>
 
@@ -469,7 +467,7 @@ export default function ReportsScreen() {
                 styles.moderatorTabText,
               ]}
             >
-              🛡️ Queue {reportStats.pending > 0 ? `(${reportStats.pending})` : ''}
+              Queue {reportStats.pending > 0 ? `(${reportStats.pending})` : ''}
             </Text>
           </TouchableOpacity>
         )}
@@ -481,7 +479,6 @@ export default function ReportsScreen() {
           {/* Success Banner */}
           {submitSuccess && (
             <Card style={styles.successCard} accessibilityRole="alert">
-              <Text style={styles.successIcon}>✅</Text>
               <Text style={styles.successTitle}>Report Submitted Successfully</Text>
               <Text style={styles.successMessage}>{submitSuccess.message}</Text>
               <View style={styles.successDetailRow}>
@@ -498,19 +495,19 @@ export default function ReportsScreen() {
 
               {/* Route Suggestion Impact: Before vs After Report */}
               <View style={styles.successReroutePreview}>
-                <Text style={styles.successPreviewHeading}>⚡ Expected Route Impact Preview</Text>
+                <Text style={styles.successPreviewHeading}>Expected Route Impact Preview</Text>
                 <Text style={styles.successPreviewText}>
                   Upon moderator verification, SafePath AI dynamically penalizes this road segment in the A* routing engine, rerouting pedestrians around the hazard:
                 </Text>
                 <View style={styles.beforeAfterMiniBox}>
                   <View style={styles.beforeAfterCol}>
-                    <Text style={styles.beforeLabel}>❌ BEFORE REPORT</Text>
+                    <Text style={styles.beforeLabel}>BEFORE REPORT</Text>
                     <Text style={styles.beforeScore}>Safety Score: 52%</Text>
                     <Text style={styles.beforeDesc}>Passes directly through hazard</Text>
                   </View>
                   <Text style={styles.beforeAfterArrow}>➔</Text>
                   <View style={styles.beforeAfterCol}>
-                    <Text style={styles.afterLabel}>✅ AFTER VERIFICATION</Text>
+                    <Text style={styles.afterLabel}>AFTER VERIFICATION</Text>
                     <Text style={styles.afterScore}>Safety Score: 88% (+36 pts)</Text>
                     <Text style={styles.afterDesc}>Detours along lit avenue (+120m)</Text>
                   </View>
@@ -1688,6 +1685,11 @@ const styles = StyleSheet.create({
   notificationBellBtn: {
     padding: 8,
     position: 'relative',
+  },
+  notificationBellText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0EA5E9',
   },
   notificationBellIcon: {
     fontSize: 20,

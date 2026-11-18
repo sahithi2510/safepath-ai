@@ -96,7 +96,7 @@ export default function RegisterScreen() {
           style={styles.serverSettingsLink}
           onPress={() => setServerModalVisible(true)}
         >
-          <Text style={styles.serverSettingsText}>⚙️ Server Settings / Change API URL</Text>
+          <Text style={styles.serverSettingsText}>Server Settings / API URL</Text>
         </TouchableOpacity>
       </ScrollView>
 

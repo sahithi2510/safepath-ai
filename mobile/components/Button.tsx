@@ -21,26 +21,30 @@ export const Button = ({ title, variant = 'primary', style, ...props }: ButtonPr
 
 const styles = StyleSheet.create({
   button: {
-    padding: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     alignItems: 'center',
-    marginVertical: 8,
+    marginVertical: 6,
   },
   primary: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0F172A',
   },
   secondary: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   danger: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#EF4444',
   },
   text: {
     color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   secondaryText: {
-    color: '#007AFF',
+    color: '#0F172A',
   }
 });

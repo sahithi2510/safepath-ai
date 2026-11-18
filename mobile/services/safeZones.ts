@@ -51,31 +51,31 @@ export const CATEGORY_CONFIG: Record<
 > = {
   POLICE_STATION: {
     label: 'Police Station',
-    icon: '👮',
+    icon: 'P',
     pinColor: '#1D68BD',
     bgHex: '#EBF5FF',
   },
   HOSPITAL: {
     label: 'Hospital / Clinic',
-    icon: '🏥',
+    icon: 'H',
     pinColor: '#E02424',
     bgHex: '#FDE8E8',
   },
   PHARMACY: {
     label: 'Pharmacy',
-    icon: '💊',
+    icon: 'Rx',
     pinColor: '#057A55',
     bgHex: '#DEF7EC',
   },
   PUBLIC_TRANSPORT: {
     label: 'Transit Hub',
-    icon: '🚏',
+    icon: 'T',
     pinColor: '#7E3AF2',
     bgHex: '#EDEBFE',
   },
   OTHER: {
     label: 'Public Assistance',
-    icon: '🏢',
+    icon: 'i',
     pinColor: '#D97706',
     bgHex: '#FEF3C7',
   },

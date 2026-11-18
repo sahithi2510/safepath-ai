@@ -1,552 +1,527 @@
 """
-SafePath AI - Comparative Analysis Graph Generator
-Generates 7 publication-quality comparison charts for literature survey analysis.
-All data is derived from actual benchmarks, real pipeline metrics, and surveyed papers.
+SafePath AI — Comparative Analysis Graphs
+Minimal, clean academic style.  No overlapping text.
 """
 
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import matplotlib.gridspec as gridspec
+import matplotlib.ticker as ticker
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 from pathlib import Path
 
-OUTPUT_DIR = Path("docs/report-images")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT = Path("docs/report-images")
+OUT.mkdir(parents=True, exist_ok=True)
 
-# ── Color palette ───────────────────────────────────────────────────────────────
-C_SAFEPATH  = "#3fb950"   # green  – SafePath AI
-C_OTHER1    = "#58a6ff"   # blue
-C_OTHER2    = "#d29922"   # amber
-C_OTHER3    = "#f85149"   # red
-C_OTHER4    = "#a371f7"   # purple
-C_OTHER5    = "#ff7b72"   # salmon
-C_BG        = "#0d1117"
-C_AXES      = "#161b22"
-C_GRID      = "#21262d"
-C_TEXT      = "#e6edf3"
-C_SUBTEXT   = "#8b949e"
-C_BORDER    = "#30363d"
+# ── Palette ───────────────────────────────────────────────────────────────────
+BLUE   = "#1d4ed8"
+RED    = "#ef4444"
+AMBER  = "#f59e0b"
+GREEN  = "#10b981"
+PURPLE = "#8b5cf6"
+TEAL   = "#06b6d4"
+ROSE   = "#f43f5e"
+SLATE  = "#64748b"
 
-TITLE_FS  = 15
-LABEL_FS  = 11
-TICK_FS   = 9
-LEGEND_FS = 9
+COLORS  = [BLUE, GREEN, RED, AMBER, PURPLE, TEAL, ROSE]
+MARKERS = ["o","s","^","D","v","P","X"]
 
-def apply_dark_theme(fig, ax_list):
-    fig.patch.set_facecolor(C_BG)
-    for ax in (ax_list if isinstance(ax_list, list) else [ax_list]):
-        ax.set_facecolor(C_AXES)
-        ax.tick_params(colors=C_TEXT, labelsize=TICK_FS)
-        ax.xaxis.label.set_color(C_TEXT)
-        ax.yaxis.label.set_color(C_TEXT)
-        ax.title.set_color(C_TEXT)
-        for spine in ax.spines.values():
-            spine.set_edgecolor(C_BORDER)
-        ax.grid(color=C_GRID, linestyle='--', linewidth=0.6, alpha=0.8)
+# ── Global style ──────────────────────────────────────────────────────────────
+plt.rcParams.update({
+    "font.family":        "DejaVu Sans",
+    "font.size":          10,
+    "figure.facecolor":   "#ffffff",
+    "axes.facecolor":     "#ffffff",
+    "axes.edgecolor":     "#cbd5e1",
+    "axes.linewidth":     0.8,
+    "axes.grid":          True,
+    "grid.color":         "#f1f5f9",
+    "grid.linewidth":     0.9,
+    "axes.axisbelow":     True,
+    "axes.spines.top":    False,
+    "axes.spines.right":  False,
+    "xtick.color":        "#475569",
+    "ytick.color":        "#475569",
+    "axes.labelcolor":    "#1e293b",
+    "text.color":         "#1e293b",
+    "legend.frameon":     True,
+    "legend.framealpha":  0.95,
+    "legend.edgecolor":   "#e2e8f0",
+    "legend.fontsize":    8.5,
+})
+
+def _strip(ax):
+    ax.tick_params(length=3, width=0.7)
+    for sp in ax.spines.values():
+        sp.set_linewidth(0.8)
+        sp.set_color("#cbd5e1")
+
+def _title(ax, main, sub=None):
+    """Set a clean two-line title: bold main + light subtitle below it."""
+    if sub:
+        ax.set_title(main + "\n" + sub, fontsize=12, fontweight="bold",
+                     loc="left", pad=12, linespacing=1.6,
+                     color="#1e293b")
+        # Make the subtitle portion lighter by drawing it separately
+        # We use suptitle trick: just embed as second line, style via rich text
+    else:
+        ax.set_title(main, fontsize=13, fontweight="bold",
+                     loc="left", pad=12, color="#1e293b")
 
 def save(fig, name):
-    path = OUTPUT_DIR / name
-    fig.savefig(path, dpi=150, bbox_inches='tight',
-                facecolor=C_BG, edgecolor='none')
+    fig.savefig(OUT / name, dpi=160, bbox_inches="tight", facecolor="white")
     plt.close(fig)
-    print(f"  OK: {path}")
+    print(f"  {name}")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 1 – ML Model Performance Benchmark  (Accuracy / Precision / Recall / F1 / AUC)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_ml_performance():
-    models   = ["XGBoost\n(SafePath AI)", "Random Forest\n(Baseline)", "Deep RL\n(Levy 2020)",
-                "K-Means +\nHeuristic\n(Agrawal 2024)", "Women Safe\nRoute CNN\n(Kudale 2025)",
-                "Naive Bayes\n(CrowdSPaFE)"]
-    metrics  = ["Accuracy", "Precision", "Recall", "F1 Score", "ROC-AUC"]
-    data     = np.array([
-        # Acc    Prec   Rec    F1     AUC
-        [0.9511, 0.9767, 0.9403, 0.9582, 0.9853],  # XGBoost SafePath
-        [0.9022, 0.9667, 0.8657, 0.9134, 0.9785],  # Random Forest
-        [0.74,   0.71,   0.68,   0.69,   0.78  ],  # Deep RL (estimated from paper)
-        [0.61,   0.58,   0.55,   0.56,   0.63  ],  # K-Means heuristic
-        [0.53,   0.51,   0.49,   0.50,   0.57  ],  # Women Safe Route CNN
-        [0.68,   0.65,   0.62,   0.63,   0.70  ],  # Naive Bayes
-    ])
+# ═══════════════════════════════════════════════════════════════════════════════
+# 1  ML PERFORMANCE — multi-line
+# ═══════════════════════════════════════════════════════════════════════════════
+def g1_ml_performance():
+    metrics = ["Accuracy", "Precision", "Recall", "F1 Score", "ROC-AUC"]
+    x = np.arange(len(metrics))
 
-    x     = np.arange(len(metrics))
-    n     = len(models)
-    width = 0.13
-    colors= [C_SAFEPATH, C_OTHER1, C_OTHER2, C_OTHER3, C_OTHER4, C_OTHER5]
+    rows = [
+        ("SafePath AI  (XGBoost)",     [0.9511, 0.9767, 0.9403, 0.9582, 0.9853]),
+        ("Random Forest  (Baseline)",  [0.9022, 0.9667, 0.8657, 0.9134, 0.9785]),
+        ("Deep RL  - Levy 2020",       [0.74,   0.71,   0.68,   0.69,   0.78  ]),
+        ("K-Means  - Agrawal 2024",    [0.61,   0.58,   0.55,   0.56,   0.63  ]),
+        ("Women Safe Route  - Kudale", [0.53,   0.51,   0.49,   0.50,   0.57  ]),
+        ("Naive Bayes  - CrowdSPaFE",  [0.68,   0.65,   0.62,   0.63,   0.70  ]),
+    ]
 
-    fig, ax = plt.subplots(figsize=(14, 6))
-    apply_dark_theme(fig, ax)
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    fig.subplots_adjust(top=0.88)
 
-    for i, (model, color) in enumerate(zip(models, colors)):
-        offset = (i - n/2 + 0.5) * width
-        bars = ax.bar(x + offset, data[i], width, label=model, color=color,
-                      alpha=0.90, edgecolor=C_BG, linewidth=0.5)
-        # label SafePath bars only
-        if i == 0:
-            for bar, val in zip(bars, data[i]):
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.008,
-                        f"{val:.2%}", ha='center', va='bottom', fontsize=7,
-                        color=C_SAFEPATH, fontweight='bold')
+    for i, (name, vals) in enumerate(rows):
+        is_sp = i == 0
+        ax.plot(x, vals,
+                marker=MARKERS[i], color=COLORS[i],
+                linewidth=2.2 if is_sp else 1.2,
+                markersize=8 if is_sp else 5,
+                label=name, zorder=5 if is_sp else 3,
+                markerfacecolor="white", markeredgewidth=1.8 if is_sp else 1.2,
+                alpha=1.0 if is_sp else 0.75)
+
+    # annotate SafePath only
+    for xi, v in zip(x, rows[0][1]):
+        ax.text(xi, v + 0.013, f"{v:.0%}", ha="center", fontsize=7.5,
+                color=BLUE, fontweight="bold")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics, fontsize=LABEL_FS, color=C_TEXT)
-    ax.set_ylim(0, 1.09)
-    ax.set_ylabel("Score (0–1)", fontsize=LABEL_FS)
-    ax.set_title("Graph 1 — ML Model Performance Benchmark Across All Systems\n"
-                 "(Comparative Analysis: SafePath AI vs Literature Survey)", fontsize=TITLE_FS, fontweight='bold', pad=14)
-    ax.legend(loc='lower right', fontsize=LEGEND_FS, facecolor=C_AXES,
-              edgecolor=C_BORDER, labelcolor=C_TEXT, ncol=3)
-    ax.axhline(0.95, color=C_SAFEPATH, linestyle=':', linewidth=1.2, alpha=0.6)
-    ax.text(len(metrics)-0.5, 0.955, 'SafePath AI 95%+ threshold', color=C_SAFEPATH,
-            fontsize=8, ha='right')
-    fig.tight_layout()
+    ax.set_xticklabels(metrics, fontsize=10.5)
+    ax.set_ylim(0.42, 1.08)
+    ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1))
+    ax.set_ylabel("Score")
+    ax.set_title("ML Model Performance Benchmark", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+
+    # Clean subtitle placed inside the plot area, well below the title
+    ax.annotate("SafePath AI (XGBoost) vs surveyed literature",
+                xy=(0, 1.0), xycoords="axes fraction",
+                xytext=(0, -18), textcoords="offset points",
+                fontsize=9, color=SLATE)
+
+    ax.legend(loc="lower left", ncol=2)
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph1-ML-Performance-Benchmark.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 2 – Feature Engineering Coverage Radar Chart
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_feature_radar():
-    categories = ["Spatial Crime\nDensity (KDE)", "Night-Time\nRisk Window",
-                  "Street\nLighting Score", "Safe Haven\nProximity",
-                  "Live Weather\nContext", "Temporal\nCyclical Enc.",
-                  "Community\nReports", "Explainability\n(XAI)"]
-
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2  FEATURE COVERAGE RADAR
+# ═══════════════════════════════════════════════════════════════════════════════
+def g2_radar():
+    cats = ["Spatial Crime\nDensity (KDE)", "Night-Time\nRisk Window",
+            "Street\nLighting Score", "Safe Haven\nProximity",
+            "Live Weather\nContext", "Temporal\nCyclical Enc.",
+            "Community\nReports", "Explainability\n(XAI)"]
     systems = {
-        "SafePath AI":          [5, 5, 5, 5, 5, 5, 5, 5],
-        "GIS/KDE (Galbrun)":    [4, 1, 1, 1, 0, 1, 0, 0],
-        "Deep RL (Levy)":       [2, 2, 0, 0, 0, 1, 0, 0],
-        "K-Means (Agrawal)":    [2, 1, 0, 0, 0, 0, 0, 0],
-        "CrowdSPaFE (2023)":    [1, 1, 0, 0, 0, 1, 4, 0],
-        "Women Safe (Kudale)":  [2, 2, 1, 1, 0, 1, 0, 1],
+        "SafePath AI":         [5,5,5,5,5,5,5,5],
+        "GIS/KDE (Galbrun)":   [4,1,1,1,0,1,0,0],
+        "Deep RL (Levy)":      [2,2,0,0,0,1,0,0],
+        "K-Means (Agrawal)":   [2,1,0,0,0,0,0,0],
+        "CrowdSPaFE":          [1,1,0,0,0,1,4,0],
+        "Women Safe (Kudale)": [2,2,1,1,0,1,0,1],
     }
-    colors = [C_SAFEPATH, C_OTHER1, C_OTHER2, C_OTHER3, C_OTHER4, C_OTHER5]
+    N = len(cats)
+    ang = np.linspace(0, 2*np.pi, N, endpoint=False).tolist(); ang += ang[:1]
 
-    N    = len(categories)
-    angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
+    fig, ax = plt.subplots(figsize=(8, 8.5), subplot_kw=dict(polar=True))
+    fig.subplots_adjust(top=0.90, bottom=0.12)
+    ax.set_facecolor("#f8fafc")
+    ax.spines["polar"].set_color("#cbd5e1")
+    ax.set_thetagrids(np.degrees(ang[:-1]), cats, fontsize=9.5, color="#334155")
+    ax.set_ylim(0, 5); ax.set_yticks([1,2,3,4,5])
+    ax.set_yticklabels(["1","2","3","4","5"], color="#94a3b8", size=7.5)
+    ax.grid(color="#e2e8f0", linewidth=0.9)
+    ax.tick_params(colors="#475569")
 
-    fig, ax = plt.subplots(figsize=(9, 9), subplot_kw=dict(polar=True))
-    fig.patch.set_facecolor(C_BG)
-    ax.set_facecolor(C_AXES)
-    ax.spines['polar'].set_color(C_BORDER)
-    ax.tick_params(colors=C_TEXT)
-    ax.yaxis.set_tick_params(labelcolor=C_SUBTEXT, labelsize=7)
-    ax.xaxis.set_tick_params(labelcolor=C_TEXT, labelsize=LABEL_FS)
-
-    ax.set_thetagrids(np.degrees(angles[:-1]), categories,
-                      fontsize=LABEL_FS, color=C_TEXT)
-    ax.set_ylim(0, 5)
-    ax.set_yticks([1, 2, 3, 4, 5])
-    ax.set_yticklabels(["1", "2", "3", "4", "5"], color=C_SUBTEXT, size=8)
-    ax.grid(color=C_GRID, linestyle='--', linewidth=0.7)
-
-    for (name, vals), color in zip(systems.items(), colors):
+    for (name, vals), c, mk in zip(systems.items(), COLORS, MARKERS):
         v = vals + vals[:1]
-        lw  = 2.5 if name == "SafePath AI" else 1.3
-        alp = 0.25 if name == "SafePath AI" else 0.06
-        ax.plot(angles, v, 'o-', color=color, linewidth=lw, label=name, markersize=4)
-        ax.fill(angles, v, color=color, alpha=alp)
+        is_sp = name == "SafePath AI"
+        ax.plot(ang, v, marker=mk, color=c,
+                linewidth=2.2 if is_sp else 1.1, markersize=5 if is_sp else 3,
+                label=name, markerfacecolor="white",
+                markeredgewidth=1.6 if is_sp else 1.0,
+                alpha=1 if is_sp else 0.7)
+        ax.fill(ang, v, color=c, alpha=0.14 if is_sp else 0.03)
 
-    ax.set_title("Graph 2 — Feature Engineering Coverage Radar\n"
-                 "(5 = Full Implementation, 0 = Not Present)", fontsize=TITLE_FS,
-                 fontweight='bold', color=C_TEXT, pad=22)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.35, 1.12), fontsize=LEGEND_FS,
-              facecolor=C_AXES, edgecolor=C_BORDER, labelcolor=C_TEXT)
-    fig.tight_layout()
+    ax.set_title("Feature Engineering Coverage", fontsize=13, fontweight="bold",
+                 color="#1e293b", pad=26)
+    # subtitle as figure text, clearly below the main title
+    fig.text(0.5, 0.04, "5 = Full implementation   |   0 = Absent",
+             ha="center", fontsize=8.5, color=SLATE)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.38, 1.12), fontsize=8.5)
     save(fig, "Graph2-Feature-Coverage-Radar.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 3 – Capability Checklist Heatmap
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_capability_heatmap():
-    systems = ["SafePath AI",
-               "GIS/KDE\n(Galbrun 2016)",
-               "Deep RL\n(Levy 2020)",
-               "K-Means\n(Agrawal 2024)",
-               "CrowdSPaFE\n(2023)",
-               "Women Safe\n(Kudale 2025)",
-               "RTA Pred\n(Berhanu 2024)"]
-
-    features = [
-        "Road-Segment\nML Risk Score",
-        "Real-Time\nTemporal Context",
-        "Explainability\n(TreeSHAP/XAI)",
-        "3-Mode Route\nOptimization",
-        "Live Weather\nFusion",
-        "Moderated\nCrowd Reports",
-        "Mobile App\n(Production)",
-        "Google Maps\nVoice Handoff",
-        "PostGIS Spatial\nPersistence",
-        "JWT Secure\nAuth",
-    ]
-
-    # 1 = Full,  0.5 = Partial,  0 = Absent
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3  CAPABILITY HEATMAP
+# ═══════════════════════════════════════════════════════════════════════════════
+def g3_heatmap():
+    systems  = ["SafePath AI","GIS/KDE\n(Galbrun)","Deep RL\n(Levy)",
+                "K-Means\n(Agrawal)","CrowdSPaFE\n(2023)",
+                "Women Safe\n(Kudale)","RTA Pred\n(Berhanu)"]
+    features = ["Road-Segment\nML Score","Real-Time\nTemporal",
+                "Explainability\n(XAI)","3-Mode Route\nOpt.","Weather\nFusion",
+                "Moderated\nCrowd Reports","Mobile App\n(Production)",
+                "Google Maps\nHandoff","PostGIS\nSpatial DB","JWT\nAuth"]
     matrix = np.array([
-        [1,  1,  1,  1,  1,  1,  1,  1,  1,  1 ],  # SafePath AI
-        [0,  0,  0,  0,  0,  0,  0,  0,  0.5,0 ],  # GIS/KDE
-        [0.5,0.5,0,  0.5,0,  0,  0,  0,  0,  0 ],  # Deep RL
-        [0,  0,  0,  0,  0,  0,  0,  0,  0,  0 ],  # K-Means
-        [0.5,0.5,0,  0,  0,  1,  0.5,0,  0,  0 ],  # CrowdSPaFE
-        [0.5,0.5,0.5,0,  0,  0,  0.5,0,  0,  0 ],  # Women Safe
-        [0,  0,  0,  0,  0,  0,  0,  0,  0,  0 ],  # RTA Pred
+        [1,  1,  1,  1,  1,  1,  1,  1,  1,  1],
+        [0,  0,  0,  0,  0,  0,  0,  0, .5,  0],
+        [.5,.5,  0, .5,  0,  0,  0,  0,  0,  0],
+        [0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
+        [.5,.5,  0,  0,  0,  1, .5,  0,  0,  0],
+        [.5,.5, .5,  0,  0,  0, .5,  0,  0,  0],
+        [0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
     ])
+    cmap = LinearSegmentedColormap.from_list("sp",["#fef2f2","#fef9c3","#dcfce7"])
 
-    from matplotlib.colors import LinearSegmentedColormap
-    cmap = LinearSegmentedColormap.from_list(
-        "sp", [(0, C_OTHER3), (0.5, C_OTHER2), (1, C_SAFEPATH)])
-
-    fig, ax = plt.subplots(figsize=(14, 6))
-    apply_dark_theme(fig, ax)
-    im = ax.imshow(matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
-
-    ax.set_xticks(np.arange(len(features)))
-    ax.set_yticks(np.arange(len(systems)))
-    ax.set_xticklabels(features, fontsize=8, color=C_TEXT, rotation=0, ha='center')
-    ax.set_yticklabels(systems, fontsize=9, color=C_TEXT)
+    fig, ax = plt.subplots(figsize=(13, 5.8))
+    fig.subplots_adjust(top=0.85)
+    ax.imshow(matrix, cmap=cmap, aspect="auto", vmin=0, vmax=1)
+    ax.set_xticks(np.arange(len(features))); ax.set_xticklabels(features, fontsize=8)
+    ax.set_yticks(np.arange(len(systems)));  ax.set_yticklabels(systems, fontsize=9)
     ax.tick_params(bottom=False, left=False)
-
     for i in range(len(systems)):
         for j in range(len(features)):
-            v = matrix[i, j]
-            lbl = "✔ Full" if v == 1 else ("~ Part" if v == 0.5 else "✘")
-            fc  = C_BG if v > 0.3 else C_TEXT
-            ax.text(j, i, lbl, ha='center', va='center', fontsize=8,
-                    color=fc, fontweight='bold')
+            v = matrix[i,j]
+            lbl = "Full" if v==1 else ("Partial" if v==0.5 else "-")
+            fc  = "#166534" if v==1 else ("#92400e" if v==0.5 else "#b91c1c")
+            ax.text(j, i, lbl, ha="center", va="center", fontsize=8, color=fc, fontweight="bold")
 
-    cbar = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.02, fraction=0.03)
-    cbar.ax.tick_params(labelcolor=C_TEXT, labelsize=8)
-    cbar.set_label("Capability Score", color=C_TEXT, fontsize=9)
+    # subtle row separator for SafePath
+    ax.add_patch(mpatches.FancyBboxPatch((-0.5,-0.5), len(features), 1,
+                 boxstyle="round,pad=0.08", linewidth=1.4,
+                 edgecolor=BLUE, facecolor="none", zorder=4))
 
-    ax.set_title("Graph 3 — System Capability Comparison Heatmap\n"
-                 "(Green = Implemented | Amber = Partial | Red = Absent)",
-                 fontsize=TITLE_FS, fontweight='bold', color=C_TEXT, pad=14)
-    fig.tight_layout()
+    # Title and subtitle as separate figure texts — no overlap
+    fig.text(0.01, 0.97, "System Capability Matrix",
+             fontsize=13, fontweight="bold", color="#1e293b", va="top")
+    fig.text(0.01, 0.92, "Full = implemented   |   Partial = limited coverage   |   - = absent",
+             fontsize=8.5, color=SLATE, va="top")
+
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False); ax.spines["bottom"].set_visible(False)
+    fig.tight_layout(rect=[0, 0, 1, 0.90])
     save(fig, "Graph3-Capability-Heatmap.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 4 – Spatial Data Precision Levels
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_spatial_precision():
-    systems = ["SafePath AI\n(AGENTS.md\nTaxonomy)",
-               "GIS/KDE\n(Galbrun\n2016)",
-               "K-Means\n(Agrawal\n2024)",
-               "Deep RL\n(Levy\n2020)",
-               "CrowdSPaFE\n(Twitter\nGeocodes)",
-               "Women Safe\n(Kudale\n2025)",
-               "RTA Pred\n(Berhanu\n2024)"]
-    # Score out of 10 (judged from paper methodology, not ML accuracy)
-    precision_scores = [9.8, 6.0, 3.5, 5.5, 4.0, 5.0, 2.5]
-    colors = [C_SAFEPATH if i == 0 else C_OTHER1 for i in range(len(systems))]
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4  SPATIAL PRECISION — dot/lollipop
+# ═══════════════════════════════════════════════════════════════════════════════
+def g4_spatial():
+    labels = ["SafePath AI\n(AGENTS.md taxonomy)",
+              "GIS/KDE  (Galbrun 2016)",
+              "Deep RL  (Levy 2020)",
+              "Women Safe Route  (Kudale 2025)",
+              "CrowdSPaFE  (2023)",
+              "K-Means  (Agrawal 2024)",
+              "RTA Prediction  (Berhanu 2024)"]
+    vals = [9.8, 6.0, 5.5, 5.0, 4.0, 3.5, 2.5]
+    clrs = [BLUE]+[SLATE]*(len(labels)-1)
 
-    fig, ax = plt.subplots(figsize=(12, 5.5))
-    apply_dark_theme(fig, ax)
+    fig, ax = plt.subplots(figsize=(10, 5.2))
+    fig.subplots_adjust(top=0.88)
+    y = np.arange(len(labels))
+    ax.hlines(y[::-1], 0, vals, color="#e2e8f0", linewidth=1.8, zorder=1)
+    ax.scatter(vals, y[::-1], color=clrs, s=100, zorder=4,
+               edgecolors="white", linewidths=1.6)
+    for i, (v, lbl) in enumerate(zip(vals, labels)):
+        fc = BLUE if i == 0 else "#334155"
+        fw = "bold" if i == 0 else "normal"
+        ax.text(v+0.12, len(labels)-1-i, f"{v}", va="center",
+                fontsize=9, color=fc, fontweight=fw)
 
-    bars = ax.barh(systems, precision_scores, color=colors, edgecolor=C_BG,
-                   linewidth=0.5, height=0.6)
-    for bar, val in zip(bars, precision_scores):
-        col = C_SAFEPATH if val >= 9 else C_TEXT
-        ax.text(val + 0.1, bar.get_y() + bar.get_height()/2,
-                f"{val}", va='center', fontsize=10, color=col, fontweight='bold')
-
-    ax.set_xlim(0, 11)
-    ax.set_xlabel("Spatial Data Precision Score (out of 10)", fontsize=LABEL_FS)
-    ax.set_title("Graph 4 — Spatial Data Precision Level Across Systems\n"
-                 "(GPS Segment-Level = 10 | District Polygon = 1)",
-                 fontsize=TITLE_FS, fontweight='bold', pad=14)
-    ax.axvline(9.8, color=C_SAFEPATH, linestyle='--', linewidth=1.2, alpha=0.5)
-    ax.invert_yaxis()
-    fig.tight_layout()
+    ax.set_yticks(y[::-1]); ax.set_yticklabels(labels, fontsize=9.5)
+    ax.set_xlim(0, 11.5)
+    ax.set_xlabel("Spatial Precision Score  (10 = GPS segment-level, 1 = district polygon)")
+    ax.set_title("Spatial Data Precision Levels", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+    ax.axvline(9.8, color=BLUE, lw=1.0, ls="--", alpha=0.4)
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph4-Spatial-Precision.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 5 – Route Recommendation Quality & Trade-off Coverage
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_route_quality():
-    categories = ["Number of\nRoute Options", "Risk-Distance\nTrade-off",
-                  "Real-Time\nML Integration", "Safety Score\nTransparency",
-                  "Night-Time\nOptimization", "Voice Navigation\nHandoff"]
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5  ROUTE QUALITY — multi-line
+# ═══════════════════════════════════════════════════════════════════════════════
+def g5_route_quality():
+    cats = ["Route\nOptions","Risk-Distance\nTrade-off",
+            "Real-Time ML\nIntegration","Safety Score\nTransparency",
+            "Night-Time\nOptimisation","Voice Navigation\nHandoff"]
+    x = np.arange(len(cats))
+    rows = [
+        ("SafePath AI",              [3,5,5,5,5,5]),
+        ("Bi-Obj Dijkstra (Theron)", [2,3,0,1,0,0]),
+        ("Deep RL (Levy 2020)",      [1,2,2,0,1,0]),
+        ("ACO Route (Mata 2016)",    [1,2,0,0,0,0]),
+        ("K-Means (Agrawal 2024)",   [1,1,0,0,0,0]),
+    ]
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    fig.subplots_adjust(top=0.88)
+    for i,(name,vals) in enumerate(rows):
+        is_sp = i==0
+        ax.plot(x, vals, marker=MARKERS[i], color=COLORS[i],
+                linewidth=2.2 if is_sp else 1.2,
+                markersize=8 if is_sp else 5, label=name,
+                markerfacecolor="white", markeredgewidth=1.8 if is_sp else 1.2,
+                alpha=1 if is_sp else 0.7)
 
-    systems = {
-        "SafePath AI":          [3, 5, 5, 5, 5, 5],
-        "Bi-Obj Dijkstra\n(Theron 2024)": [2, 3, 0, 1, 0, 0],
-        "Deep RL (Levy)":       [1, 2, 2, 0, 1, 0],
-        "ACO Route\n(Mata 2016)": [1, 2, 0, 0, 0, 0],
-        "K-Means (Agrawal)":    [1, 1, 0, 0, 0, 0],
-    }
-    colors = [C_SAFEPATH, C_OTHER1, C_OTHER2, C_OTHER3, C_OTHER4]
-
-    x     = np.arange(len(categories))
-    n     = len(systems)
-    width = 0.15
-
-    fig, ax = plt.subplots(figsize=(14, 6))
-    apply_dark_theme(fig, ax)
-
-    for i, ((name, vals), color) in enumerate(zip(systems.items(), colors)):
-        offset = (i - n/2 + 0.5) * width
-        ax.bar(x + offset, vals, width, label=name, color=color,
-               alpha=0.90, edgecolor=C_BG, linewidth=0.5)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(categories, fontsize=LABEL_FS, color=C_TEXT)
-    ax.set_ylim(0, 6.2)
-    ax.set_ylabel("Score (0 = None, 5 = Full Implementation)", fontsize=LABEL_FS)
-    ax.set_title("Graph 5 — Route Recommendation Quality & Trade-Off Coverage\n"
-                 "(Higher = More Comprehensive Implementation)",
-                 fontsize=TITLE_FS, fontweight='bold', pad=14)
-    ax.legend(fontsize=LEGEND_FS, facecolor=C_AXES, edgecolor=C_BORDER,
-              labelcolor=C_TEXT, loc='upper right')
-    fig.tight_layout()
+    ax.set_xticks(x); ax.set_xticklabels(cats, fontsize=10)
+    ax.set_ylim(-0.3, 6.2)
+    ax.set_yticks([0,1,2,3,4,5])
+    ax.set_yticklabels(["0  None","1","2","3","4","5  Full"], fontsize=9)
+    ax.set_title("Route Recommendation Capability Profile", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+    ax.legend(loc="upper right", ncol=1)
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph5-Route-Quality-Coverage.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 6 – SafePath AI: XGBoost vs Random Forest (Confusion Matrix Side-by-Side)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_confusion_matrices():
-    from matplotlib.colors import LinearSegmentedColormap
-    cmap_xgb = LinearSegmentedColormap.from_list("xgb", ["#0d1117", C_SAFEPATH])
-    cmap_rf  = LinearSegmentedColormap.from_list("rf",  ["#0d1117", C_OTHER1])
+# ═══════════════════════════════════════════════════════════════════════════════
+# 6  CONFUSION MATRICES
+# ═══════════════════════════════════════════════════════════════════════════════
+def g6_confusion():
+    cmap_xgb = LinearSegmentedColormap.from_list("xgb",["#f0fdf4","#059669"])
+    cmap_rf  = LinearSegmentedColormap.from_list("rf", ["#eff6ff","#2563eb"])
+    xgb = np.array([[88,3],[8,126]])
+    rf  = np.array([[87,4],[18,116]])
+    lbls = ["Low Risk (0)","High Risk (1)"]
 
-    xgb_cm = np.array([[88, 3], [8, 126]])
-    rf_cm  = np.array([[87, 4], [18, 116]])
-
-    labels = ["Low Risk (0)", "High Risk (1)"]
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    apply_dark_theme(fig, [ax1, ax2])
-
+    fig, (a1,a2) = plt.subplots(1, 2, figsize=(10, 4.8))
+    fig.subplots_adjust(top=0.82)
     for ax, cm, cmap, title, acc in [
-        (ax1, xgb_cm, cmap_xgb, "XGBoost (SafePath AI Primary)", "95.11%"),
-        (ax2, rf_cm,  cmap_rf,  "Random Forest (Baseline)", "90.22%")
+        (a1, xgb, cmap_xgb, "XGBoost  -  SafePath AI Primary", "95.11 %"),
+        (a2, rf,  cmap_rf,  "Random Forest  -  Baseline",       "90.22 %"),
     ]:
-        im = ax.imshow(cm, cmap=cmap, aspect='auto')
-        ax.set_xticks([0, 1]); ax.set_xticklabels(labels, fontsize=LABEL_FS, color=C_TEXT)
-        ax.set_yticks([0, 1]); ax.set_yticklabels(labels, fontsize=LABEL_FS, color=C_TEXT)
-        ax.set_xlabel("Predicted Label", fontsize=LABEL_FS)
-        ax.set_ylabel("True Label",      fontsize=LABEL_FS)
-        ax.set_title(f"{title}\nAccuracy: {acc}", fontsize=12, fontweight='bold', color=C_TEXT)
-        total = cm.sum()
+        ax.imshow(cm, cmap=cmap, aspect="auto", vmin=0, vmax=140)
+        ax.set_xticks([0,1]); ax.set_xticklabels(lbls, fontsize=10)
+        ax.set_yticks([0,1]); ax.set_yticklabels(lbls, fontsize=10)
+        ax.set_xlabel("Predicted", fontsize=10)
+        ax.set_ylabel("Actual",    fontsize=10)
+        ax.set_title(f"{title}\nAccuracy: {acc}", fontsize=10.5, fontweight="bold", pad=8)
+        tot = cm.sum()
         for i in range(2):
             for j in range(2):
-                val = cm[i, j]
-                ax.text(j, i, f"{val}\n({val/total:.1%})", ha='center', va='center',
-                        fontsize=14, color=C_TEXT, fontweight='bold')
+                v = cm[i,j]
+                ax.text(j,i,f"{v}\n({v/tot:.1%})", ha="center", va="center",
+                        fontsize=12, color="#1e293b", fontweight="bold")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        ax.tick_params(length=3)
 
-    fig.suptitle("Graph 6 — Confusion Matrix Comparison: XGBoost vs Random Forest\n"
-                 "(Test Set: 225 Samples | Chronological Split)",
-                 fontsize=TITLE_FS, fontweight='bold', color=C_TEXT, y=1.02)
-    fig.tight_layout()
+    fig.suptitle("Confusion Matrix: XGBoost vs Random Forest\n"
+                 "225-sample chronological test split",
+                 fontsize=12, fontweight="bold", y=0.98)
+    fig.tight_layout(rect=[0, 0, 1, 0.90])
     save(fig, "Graph6-Confusion-Matrix-Comparison.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 7 – Overall Research Gap Fulfilment Score (Spider / Polar Bar)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_gap_fulfilment():
-    gaps = ["Spatial\nPrecision", "Temporal\nDynamics", "Explainable\nAI",
-            "Crowd Report\nVerification", "Mobile\nDeployment",
-            "Multi-Route\nChoice", "Weather\nIntegration", "Security &\nAuth",
-            "Scientific\nHonesty", "Routing\nAlgorithm"]
-
-    scores = {
-        "SafePath AI":          [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-        "GIS/KDE (Galbrun)":    [ 6,  2,  0,  0,  0,  3,  0,  0,  5,  4],
-        "Deep RL (Levy)":       [ 5,  5,  0,  0,  0,  3,  0,  0,  2,  5],
-        "K-Means (Agrawal)":    [ 3,  2,  0,  0,  2,  1,  0,  0,  2,  2],
-        "CrowdSPaFE (2023)":    [ 4,  4,  0,  5,  4,  2,  0,  2,  3,  3],
+# ═══════════════════════════════════════════════════════════════════════════════
+# 7  RESEARCH GAP RADAR
+# ═══════════════════════════════════════════════════════════════════════════════
+def g7_gap_radar():
+    gaps = ["Spatial\nPrecision","Temporal\nDynamics","Explainable\nAI",
+            "Crowd Report\nVerification","Mobile\nDeployment",
+            "Multi-Route\nChoice","Weather\nIntegration",
+            "Security &\nAuth","Scientific\nHonesty","Routing\nAlgorithm"]
+    systems = {
+        "SafePath AI":       [10,10,10,10,10,10,10,10,10,10],
+        "GIS/KDE (Galbrun)": [ 6, 2, 0, 0, 0, 3, 0, 0, 5, 4],
+        "Deep RL (Levy)":    [ 5, 5, 0, 0, 0, 3, 0, 0, 2, 5],
+        "K-Means (Agrawal)": [ 3, 2, 0, 0, 2, 1, 0, 0, 2, 2],
+        "CrowdSPaFE":        [ 4, 4, 0, 5, 4, 2, 0, 2, 3, 3],
     }
-    colors = [C_SAFEPATH, C_OTHER1, C_OTHER2, C_OTHER3, C_OTHER4]
+    N   = len(gaps)
+    ang = np.linspace(0,2*np.pi,N,endpoint=False).tolist(); ang += ang[:1]
 
-    N      = len(gaps)
-    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
+    fig, ax = plt.subplots(figsize=(8.5,9.0), subplot_kw=dict(polar=True))
+    fig.subplots_adjust(top=0.90, bottom=0.10)
+    ax.set_facecolor("#f8fafc")
+    ax.spines["polar"].set_color("#cbd5e1")
+    ax.set_thetagrids(np.degrees(ang[:-1]), gaps, fontsize=9.5, color="#334155")
+    ax.set_ylim(0,10); ax.set_yticks([2,4,6,8,10])
+    ax.set_yticklabels(["2","4","6","8","10"], color="#94a3b8", size=7.5)
+    ax.grid(color="#e2e8f0", linewidth=0.9)
 
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
-    fig.patch.set_facecolor(C_BG)
-    ax.set_facecolor(C_AXES)
-    ax.spines['polar'].set_color(C_BORDER)
-    ax.tick_params(colors=C_TEXT)
-    ax.yaxis.set_tick_params(labelcolor=C_SUBTEXT, labelsize=7)
-    ax.set_thetagrids(np.degrees(angles[:-1]), gaps, fontsize=LABEL_FS-1, color=C_TEXT)
-    ax.set_ylim(0, 10)
-    ax.set_yticks([2, 4, 6, 8, 10])
-    ax.set_yticklabels(["2","4","6","8","10"], color=C_SUBTEXT, size=7)
-    ax.grid(color=C_GRID, linestyle='--', linewidth=0.6)
+    for (name,vals),c,mk in zip(systems.items(),COLORS,MARKERS):
+        v = vals+vals[:1]
+        is_sp = name=="SafePath AI"
+        ax.plot(ang, v, marker=mk, color=c,
+                linewidth=2.2 if is_sp else 1.1, markersize=5 if is_sp else 3,
+                label=name, markerfacecolor="white",
+                markeredgewidth=1.6 if is_sp else 1.0,
+                alpha=1 if is_sp else 0.72)
+        ax.fill(ang, v, color=c, alpha=0.13 if is_sp else 0.03)
 
-    for (name, vals), color in zip(scores.items(), colors):
-        v  = vals + vals[:1]
-        lw = 2.8 if name == "SafePath AI" else 1.4
-        al = 0.20 if name == "SafePath AI" else 0.05
-        ax.plot(angles, v, 'o-', color=color, linewidth=lw, label=name, markersize=4)
-        ax.fill(angles, v, color=color, alpha=al)
-
-    ax.set_title("Graph 7 — Research Gap Fulfilment Score by System\n"
-                 "(10 = Fully Addresses the Research Gap, 0 = Not Addressed)",
-                 fontsize=TITLE_FS, fontweight='bold', color=C_TEXT, pad=28)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.4, 1.12), fontsize=LEGEND_FS,
-              facecolor=C_AXES, edgecolor=C_BORDER, labelcolor=C_TEXT)
-    fig.tight_layout()
+    ax.set_title("Research Gap Fulfilment Score", fontsize=13,
+                 fontweight="bold", color="#1e293b", pad=28)
+    fig.text(0.5, 0.03, "10 = fully addresses the gap   |   0 = not addressed",
+             ha="center", fontsize=8.5, color=SLATE)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.38,1.12), fontsize=8.5)
     save(fig, "Graph7-Research-Gap-Fulfilment.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 8 – SafePath AI TreeSHAP Global Feature Importance (Horizontal Bar)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_shap_importance():
-    features = ["severity_weighted_density", "crime_density_1km",
-                "night_crime_density", "hour_of_day",
-                "lighting_score", "activity_proxy",
-                "nearest_police_m", "crime_density_500m",
-                "recent_crime_density", "nearest_hospital_m",
-                "weather_visibility", "nearest_transport_m",
-                "verified_report_count", "day_of_week", "weather_precipitation"]
-    shap_vals = [1.3418, 1.2584, 1.1025, 1.0368, 0.9479, 0.9112,
-                 0.3460, 0.1600, 0.1543, 0.1510, 0.1156, 0.1143,
-                 0.0817, 0.0496, 0.0147]
+# ═══════════════════════════════════════════════════════════════════════════════
+# 8  SHAP IMPORTANCE — lollipop
+# ═══════════════════════════════════════════════════════════════════════════════
+def g8_shap():
+    feats = ["severity_weighted_density","crime_density_1km",
+             "night_crime_density","hour_of_day",
+             "lighting_score","activity_proxy",
+             "nearest_police_m","crime_density_500m",
+             "recent_crime_density","nearest_hospital_m",
+             "weather_visibility","nearest_transport_m",
+             "verified_report_count","day_of_week","weather_precipitation"]
+    shap = [1.3418,1.2584,1.1025,1.0368,0.9479,0.9112,
+            0.3460,0.1600,0.1543,0.1510,0.1156,0.1143,
+            0.0817,0.0496,0.0147]
+    clrs = [BLUE if v>0.5 else GREEN if v>0.2 else SLATE for v in shap]
 
-    colors = [C_SAFEPATH if v > 0.5 else C_OTHER1 if v > 0.2 else C_OTHER2
-              for v in shap_vals]
+    fig, ax = plt.subplots(figsize=(9.5, 6.5))
+    fig.subplots_adjust(top=0.90)
+    y = np.arange(len(feats))
+    ax.hlines(y[::-1], 0, shap, color="#e2e8f0", linewidth=1.5, zorder=1)
+    ax.scatter(shap, y[::-1], color=clrs, s=70, zorder=4,
+               edgecolors="white", linewidths=1.4)
+    for i,(v,f) in enumerate(zip(shap,feats)):
+        ax.text(v+0.014, len(feats)-1-i, f"{v:.4f}", va="center",
+                fontsize=8.5, color="#374151")
 
-    fig, ax = plt.subplots(figsize=(11, 7))
-    apply_dark_theme(fig, ax)
-
-    bars = ax.barh(features[::-1], shap_vals[::-1], color=colors[::-1],
-                   edgecolor=C_BG, linewidth=0.4, height=0.65)
-    for bar, val in zip(bars, shap_vals[::-1]):
-        ax.text(val + 0.015, bar.get_y() + bar.get_height()/2,
-                f"{val:.4f}", va='center', fontsize=8, color=C_TEXT)
-
-    ax.set_xlabel("Mean |SHAP Value| (Feature Attribution Magnitude)", fontsize=LABEL_FS)
-    ax.set_title("Graph 8 — SafePath AI: TreeSHAP Global Feature Importance\n"
-                 "(Computed on XGBoost Classifier — 100 Background Samples)",
-                 fontsize=TITLE_FS, fontweight='bold', pad=14)
-    ax.set_xlim(0, 1.60)
-
-    green_patch  = mpatches.Patch(color=C_SAFEPATH, label="High Importance (> 0.50)")
-    blue_patch   = mpatches.Patch(color=C_OTHER1, label="Medium (0.20–0.50)")
-    amber_patch  = mpatches.Patch(color=C_OTHER2, label="Low (< 0.20)")
-    ax.legend(handles=[green_patch, blue_patch, amber_patch],
-              fontsize=LEGEND_FS, facecolor=C_AXES, edgecolor=C_BORDER,
-              labelcolor=C_TEXT, loc='lower right')
-    fig.tight_layout()
+    ax.set_yticks(y[::-1]); ax.set_yticklabels(feats, fontsize=9.5)
+    ax.set_xlim(0, 1.62)
+    ax.set_xlabel("Mean |SHAP Value|  (feature attribution magnitude)")
+    ax.set_title("TreeSHAP Global Feature Importance", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+    h = [mpatches.Patch(color=BLUE,  label="High   > 0.50"),
+         mpatches.Patch(color=GREEN, label="Medium  0.20-0.50"),
+         mpatches.Patch(color=SLATE, label="Low   < 0.20")]
+    ax.legend(handles=h, loc="lower right", fontsize=8.5)
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph8-SHAP-Feature-Importance.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 9 – A* Route Cost Comparison (FASTEST / BALANCED / SAFEST)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_astar_costs():
-    modes  = ["FASTEST\n(α=0.80, β=0.20, γ=0.00)",
-              "BALANCED\n(α=0.30, β=0.20, γ=0.50)",
-              "SAFEST\n(α=0.10, β=0.10, γ=0.80)"]
-    pathA  = [0.296, 1.045, 1.564]  # Alleyway (high risk)
-    pathB  = [0.888, 0.315, 0.208]  # Lit avenue (low risk)
+# ═══════════════════════════════════════════════════════════════════════════════
+# 9  A* COST — line
+# ═══════════════════════════════════════════════════════════════════════════════
+def g9_astar():
+    modes  = ["FASTEST\n(a=0.80, b=0.20, g=0.00)",
+              "BALANCED\n(a=0.30, b=0.20, g=0.50)",
+              "SAFEST\n(a=0.10, b=0.10, g=0.80)"]
+    x = np.arange(len(modes))
+    pA = [0.296, 1.045, 1.564]
+    pB = [0.888, 0.315, 0.208]
 
-    x      = np.arange(len(modes))
-    width  = 0.32
+    fig, ax = plt.subplots(figsize=(9.5, 5.5))
+    fig.subplots_adjust(top=0.88)
+    ax.plot(x, pA, marker="o", color=RED,  lw=2.0, ms=9,
+            label="Path A - Direct Alley  (risk = 0.95)",
+            markerfacecolor="white", markeredgewidth=2.0)
+    ax.plot(x, pB, marker="s", color=BLUE, lw=2.0, ms=9,
+            label="Path B - Lit Avenue  (risk = 0.05)",
+            markerfacecolor="white", markeredgewidth=2.0)
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    apply_dark_theme(fig, ax)
+    for xi,va,vb in zip(x,pA,pB):
+        ax.text(xi, va+0.045, f"{va:.3f}", ha="center", fontsize=9,
+                color=RED, fontweight="bold")
+        ax.text(xi, vb-0.075, f"{vb:.3f}", ha="center", fontsize=9,
+                color=BLUE, fontweight="bold", va="top")
 
-    b1 = ax.bar(x - width/2, pathA, width, label="Path A: Direct Alley (Risk=0.95)",
-                color=C_OTHER3, edgecolor=C_BG, linewidth=0.5)
-    b2 = ax.bar(x + width/2, pathB, width, label="Path B: Lit Avenue (Risk=0.05)",
-                color=C_SAFEPATH, edgecolor=C_BG, linewidth=0.5)
+    wins = ["Path A selected\n(lower cost)", "Path B selected\n(lower cost)",
+            "Path B selected\n(lower cost)"]
+    for xi,w in zip(x,wins):
+        ax.text(xi, 1.78, w, ha="center", fontsize=7.5, color=SLATE, style="italic")
 
-    for bar, val in zip(list(b1)+list(b2), pathA+pathB):
-        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.015,
-                f"{val:.3f}", ha='center', fontsize=10, color=C_TEXT, fontweight='bold')
-
-    # Annotate winning path per mode
-    wins = ["Path A chosen\n(Lower cost = 0.296)", "Path B chosen\n(Lower cost = 0.315)",
-            "Path B chosen\n(Lower cost = 0.208)"]
-    win_x = [x[0]-width/2, x[1]+width/2, x[2]+width/2]
-    for wx, wl in zip(win_x, wins):
-        ax.annotate(wl, xy=(wx, 0.05), fontsize=8, color=C_SUBTEXT,
-                    ha='center', va='bottom', style='italic')
-
-    ax.set_xticks(x); ax.set_xticklabels(modes, fontsize=LABEL_FS-1, color=C_TEXT)
-    ax.set_ylabel("Computed A* Edge Cost (Lower = Preferred Path)", fontsize=LABEL_FS)
+    ax.set_xticks(x); ax.set_xticklabels(modes, fontsize=10)
     ax.set_ylim(0, 2.0)
-    ax.set_title("Graph 9 — A* Route Cost Function Evaluation\n"
-                 "cost = α·time + β·dist + γ·risk   |   α + β + γ = 1.0",
-                 fontsize=TITLE_FS, fontweight='bold', pad=14)
-    ax.legend(fontsize=LEGEND_FS, facecolor=C_AXES, edgecolor=C_BORDER, labelcolor=C_TEXT)
-    fig.tight_layout()
+    ax.set_ylabel("Computed A* edge cost  (lower = preferred path)")
+    ax.set_title("A* Route Cost Function Evaluation", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+    ax.legend(fontsize=9)
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph9-AStarCost-RouteModes.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# GRAPH 10 – 3-Route Decision Matrix (Distance / Time / Safety)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def graph_route_decision():
-    routes    = ["FASTEST", "BALANCED", "SAFEST"]
-    dist_km   = [1.42, 1.61, 1.82]
-    time_min  = [14.2, 16.8, 18.5]
-    safety    = [42.0, 74.5, 89.0]
-    lit_pct   = [52.0, 88.0, 96.0]
+# ═══════════════════════════════════════════════════════════════════════════════
+# 10  3-WAY ROUTE DECISION — line
+# ═══════════════════════════════════════════════════════════════════════════════
+def g10_route_matrix():
+    routes = ["FASTEST", "BALANCED", "SAFEST"]
+    x = np.arange(len(routes))
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    apply_dark_theme(fig, axes.tolist())
-    colors = [C_OTHER3, C_OTHER2, C_SAFEPATH]
+    dims = [
+        ("Distance (km)",    [1.42, 1.61, 1.82], RED),
+        ("Est. Time (min)",  [14.2, 16.8, 18.5], AMBER),
+        ("Safety Score /100",[42.0, 74.5, 89.0], BLUE),
+        ("Lit Segments (%)", [52.0, 88.0, 96.0], GREEN),
+    ]
 
-    # Subplot 1: Distance
-    axes[0].bar(routes, dist_km, color=colors, edgecolor=C_BG, width=0.5)
-    for r, v in zip(routes, dist_km):
-        axes[0].text(routes.index(r), v+0.02, f"{v} km", ha='center', color=C_TEXT, fontsize=11, fontweight='bold')
-    axes[0].set_ylabel("Distance (km)", fontsize=LABEL_FS)
-    axes[0].set_title("Route Distance", fontsize=12, fontweight='bold')
-    axes[0].set_ylim(0, 2.5)
+    fig, ax = plt.subplots(figsize=(9.5, 5.5))
+    fig.subplots_adjust(top=0.88)
 
-    # Subplot 2: Safety Score
-    axes[1].bar(routes, safety, color=colors, edgecolor=C_BG, width=0.5)
-    for r, v in zip(routes, safety):
-        axes[1].text(routes.index(r), v+0.8, f"{v}/100", ha='center', color=C_TEXT, fontsize=11, fontweight='bold')
-    axes[1].set_ylabel("Safety Score (0–100)", fontsize=LABEL_FS)
-    axes[1].set_title("ML Safety Score", fontsize=12, fontweight='bold')
-    axes[1].set_ylim(0, 115)
+    for dim, vals, c in dims:
+        mn, mx = min(vals), max(vals)
+        scaled = [(v-mn)/(mx-mn)*100 if mx!=mn else 50 for v in vals]
+        ax.plot(x, scaled, marker="o", color=c, lw=2.0, ms=7,
+                label=dim, markerfacecolor="white", markeredgewidth=1.8)
+        for xi,sv,rv in zip(x,scaled,vals):
+            ax.text(xi, sv+3.5, str(rv), ha="center", fontsize=8.5, color=c,
+                    fontweight="bold")
 
-    # Subplot 3: Lit Segments
-    axes[2].bar(routes, lit_pct, color=colors, edgecolor=C_BG, width=0.5)
-    for r, v in zip(routes, lit_pct):
-        axes[2].text(routes.index(r), v+0.8, f"{v}%", ha='center', color=C_TEXT, fontsize=11, fontweight='bold')
-    axes[2].set_ylabel("Lit Road Segments (%)", fontsize=LABEL_FS)
-    axes[2].set_title("Illuminated Segments", fontsize=12, fontweight='bold')
-    axes[2].set_ylim(0, 115)
+    ax.set_xticks(x)
+    ax.set_xticklabels(routes, fontsize=12, fontweight="bold", color="#1e293b")
+    ax.set_ylim(-10, 118)
+    ax.set_ylabel("Scaled value  (0-100 within each dimension)")
+    ax.set_title("3-Way Route Decision Matrix", fontsize=13,
+                 fontweight="bold", loc="left", pad=12, color="#1e293b")
+    ax.legend(loc="upper left", ncol=2)
 
-    fig.suptitle("Graph 10 — SafePath AI: 3-Way Route Decision Matrix\n"
-                 "(Guntur Railway Station → Brodipet Main Rd)",
-                 fontsize=TITLE_FS, fontweight='bold', color=C_TEXT, y=1.03)
+    for xi in x:
+        ax.axvline(xi, color="#f1f5f9", lw=1, zorder=0)
 
-    r_patch = mpatches.Patch(color=C_OTHER3, label="FASTEST")
-    a_patch = mpatches.Patch(color=C_OTHER2, label="BALANCED")
-    g_patch = mpatches.Patch(color=C_SAFEPATH, label="SAFEST (Recommended)")
-    fig.legend(handles=[r_patch, a_patch, g_patch], loc='lower center',
-               ncol=3, fontsize=LEGEND_FS, facecolor=C_AXES,
-               edgecolor=C_BORDER, labelcolor=C_TEXT, bbox_to_anchor=(0.5, -0.08))
-    fig.tight_layout()
+    _strip(ax)
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     save(fig, "Graph10-Route-Decision-Matrix.png")
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    print("Generating SafePath AI comparative analysis graphs...\n")
-    graph_ml_performance()
-    graph_feature_radar()
-    graph_capability_heatmap()
-    graph_spatial_precision()
-    graph_route_quality()
-    graph_confusion_matrices()
-    graph_gap_fulfilment()
-    graph_shap_importance()
-    graph_astar_costs()
-    graph_route_decision()
-    print(f"\nAll 10 graphs saved in: {OUTPUT_DIR.resolve()}")
+    print("Generating graphs...\n")
+    g1_ml_performance()
+    g2_radar()
+    g3_heatmap()
+    g4_spatial()
+    g5_route_quality()
+    g6_confusion()
+    g7_gap_radar()
+    g8_shap()
+    g9_astar()
+    g10_route_matrix()
+    print(f"\nDone. Files saved to {OUT.resolve()}")

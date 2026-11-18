@@ -60,15 +60,13 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
         accessibilityLabel="Open weather details"
       >
         {loading ? (
-          <ActivityIndicator size="small" color="#1F2937" style={styles.spinner} />
+          <ActivityIndicator size="small" color="#64748B" style={styles.spinner} />
         ) : error || !weather?.available ? (
-          <Text style={styles.compactText}>☁️ Weather N/A</Text>
+          <Text style={styles.compactText}>Weather N/A</Text>
         ) : (
           <Text style={styles.compactText}>
-            {emoji} {obs?.temperatureC != null ? `${Math.round(obs.temperatureC)}°C` : '--'}
-            {obs?.precipitationMm != null && obs.precipitationMm > 0
-              ? ` • ${obs.precipitationMm}mm`
-              : ''}
+            {obs?.temperatureC != null ? `${Math.round(obs.temperatureC)}°C` : '--'}
+            {obs?.condition ? ` • ${obs.condition}` : ''}
           </Text>
         )}
       </TouchableOpacity>
@@ -79,7 +77,7 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
     <View style={[styles.cardContainer, style]} accessibilityRole="summary" accessibilityLabel="Ambient Weather Context">
       <View style={styles.headerRow}>
         <View style={styles.titleWithIcon}>
-          <Text style={styles.titleIcon}>{emoji}</Text>
+          <View style={styles.weatherDot} />
           <View>
             <Text style={styles.cardTitle}>Ambient Weather Context</Text>
             <Text style={styles.subtitle}>Environmental observation (not a crime metric)</Text>
@@ -191,24 +189,27 @@ export const WeatherWidget: React.FC<WeatherWidgetProps> = ({
 
 const styles = StyleSheet.create({
   compactPill: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
   },
   compactText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    letterSpacing: 0.2,
+  },
+  weatherDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#0EA5E9',
+    marginRight: 8,
   },
   spinner: {
     marginRight: 4,
