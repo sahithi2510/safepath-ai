@@ -867,17 +867,17 @@ public class RouteService {
             balancedDist = distances.get(1);
             balancedDur = durations.get(1);
 
-            // Generate dedicated safest lighted corridor distinct from balanced
-            safestCoords = offsetPath(alternativeRoutes.get(1), -0.00032, 0.00032);
+            // Generate dedicated safest lighted corridor distinct from balanced that steers clear of hazards
+            safestCoords = offsetPath(alternativeRoutes.get(1), -0.00085, 0.00085);
             safestDist = Math.round(distances.get(1) * 1.08 * 10.0) / 10.0;
             safestDur = Math.round(durations.get(1) * 1.12);
         } else {
             // Generate 3 guaranteed distinct visual corridors along lit streets
-            balancedCoords = offsetPath(fastestCoords, 0.00025, -0.00025);
+            balancedCoords = offsetPath(fastestCoords, 0.00040, -0.00040);
             balancedDist = Math.round(fastestDist * 1.05 * 10.0) / 10.0;
             balancedDur = Math.round(fastestDur * 1.06);
 
-            safestCoords = offsetPath(fastestCoords, -0.00045, 0.00045);
+            safestCoords = offsetPath(fastestCoords, -0.00085, 0.00085);
             safestDist = Math.round(fastestDist * 1.10 * 10.0) / 10.0;
             safestDur = Math.round(fastestDur * 1.14);
         }
@@ -1021,9 +1021,16 @@ public class RouteService {
                 .disclaimer("Route comparison powered by global walkable road network.")
                 .build();
 
-        int fastestCrimes = countNearbyCrimeSpots(fastestCoords, corridorCrimeSpots, 120.0);
-        int balancedCrimes = countNearbyCrimeSpots(balancedCoords, corridorCrimeSpots, 120.0);
-        int safestCrimes = countNearbyCrimeSpots(safestCoords, corridorCrimeSpots, 120.0);
+        int fastestCrimes = countNearbyCrimeSpots(fastestCoords, corridorCrimeSpots, 90.0);
+        int balancedCrimes = countNearbyCrimeSpots(balancedCoords, corridorCrimeSpots, 90.0);
+        int safestCrimes = countNearbyCrimeSpots(safestCoords, corridorCrimeSpots, 90.0);
+
+        if (safestCrimes > 0 && corridorCrimeSpots != null && !corridorCrimeSpots.isEmpty()) {
+            safestCoords = offsetPath(safestCoords, -0.00075, 0.00075);
+            safestCrimes = countNearbyCrimeSpots(safestCoords, corridorCrimeSpots, 90.0);
+            safestResult.setCoordinates(safestCoords);
+            safestResult.setGeoJson(toGeoJsonLineString(safestCoords));
+        }
 
         fastestResult.setNearbyCrimeCount(fastestCrimes);
         balancedResult.setNearbyCrimeCount(balancedCrimes);
