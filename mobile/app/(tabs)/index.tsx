@@ -62,6 +62,8 @@ export interface MapRouteResponse {
   fastestRoute: MapRouteResult;
   balancedRoute: MapRouteResult;
   safestRoute: MapRouteResult;
+  crimeSpots?: any[];
+  hazardsAvoidedCount?: number;
 }
 
 export default function MapScreen() {
@@ -106,6 +108,7 @@ export default function MapScreen() {
   const [routeError, setRouteError] = useState<string | null>(null);
   const [destSuggestions, setDestSuggestions] = useState<GeocodedPlace[]>([]);
   const [searchingPlaces, setSearchingPlaces] = useState(false);
+  const [selectedCrimeSpot, setSelectedCrimeSpot] = useState<any | null>(null);
   const destSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,8 +311,15 @@ export default function MapScreen() {
         safeZones={safeZonesEnabled ? safeZones : []}
         onSafeZoneSelect={(zone) => {
           setSelectedSegment(null);
+          setSelectedCrimeSpot(null);
           const full = safeZones.find((z) => String(z.id) === String(zone.id));
           if (full) setSelectedSafeZone(full);
+        }}
+        crimeSpots={showRoute && routeResponse?.crimeSpots ? routeResponse.crimeSpots : []}
+        onCrimeSpotSelect={(spot) => {
+          setSelectedSegment(null);
+          setSelectedSafeZone(null);
+          setSelectedCrimeSpot(spot);
         }}
         routes={mapRoutes}
         origin={selectedRoute?.coordinates?.[0] ?? null}
@@ -596,6 +606,34 @@ export default function MapScreen() {
               <Text style={styles.directoryLinkBtnText}>Directory</Text>
             </TouchableOpacity>
           </View>
+        </Card>
+      )}
+
+      {/* Selected Crime / Hazard Spot Detail Card */}
+      {selectedCrimeSpot && (
+        <Card style={styles.safeZoneDetailCard}>
+          <View style={styles.safeZoneCardHeader}>
+            <View style={styles.safeZoneTitleCol}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="warning" size={16} color="#DC2626" />
+                <Text style={styles.safeZoneName} numberOfLines={1}>{selectedCrimeSpot.crimeType || 'Reported Incident'}</Text>
+              </View>
+              <View style={[styles.safeZoneBadge, { backgroundColor: '#FEE2E2', marginTop: 4 }]}>
+                <Text style={[styles.safeZoneBadgeText, { color: '#DC2626' }]}>
+                  Severity {selectedCrimeSpot.severity}/5 ({selectedCrimeSpot.severity >= 4 ? 'High Risk' : selectedCrimeSpot.severity >= 3 ? 'Moderate' : 'Low'})
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => setSelectedCrimeSpot(null)}><Text style={styles.closeBtnText}>✕</Text></TouchableOpacity>
+          </View>
+          {selectedCrimeSpot.crimeSubtype ? (
+            <View style={styles.safeZoneInfoRow}><Text style={styles.safeZoneInfoLabel}>Type:</Text><Text style={styles.safeZoneInfoValue}>{selectedCrimeSpot.crimeSubtype}</Text></View>
+          ) : null}
+          {selectedCrimeSpot.address ? (
+            <View style={styles.safeZoneInfoRow}><Text style={styles.safeZoneInfoLabel}>Address:</Text><Text style={styles.safeZoneInfoValue}>{selectedCrimeSpot.address}</Text></View>
+          ) : null}
+          <View style={styles.safeZoneInfoRow}><Text style={styles.safeZoneInfoLabel}>Source:</Text><Text style={styles.safeZoneInfoSubtle}>{selectedCrimeSpot.source || 'Open Safety Data'}</Text></View>
+          <View style={styles.safeZoneDisclaimerBox}><Text style={styles.safeZoneDisclaimerText}>Reported incident recorded in open safety database. SafePath routing engine actively penalizes and steers clear of this location.</Text></View>
         </Card>
       )}
 

@@ -17,6 +17,7 @@ import com.safepath.backend.repository.RoadSegmentRepository;
 import com.safepath.backend.repository.RouteRequestRepository;
 import com.safepath.backend.repository.RouteResultRepository;
 import com.safepath.backend.repository.UserRepository;
+import com.safepath.backend.dto.CrimeIncidentDto;
 import com.safepath.backend.service.ml.MlServiceClient;
 import com.safepath.backend.service.ml.RoadSegmentFeatureService;
 import com.safepath.backend.service.routing.AStarRoutingEngine;
@@ -55,6 +56,7 @@ public class RouteService {
     private final MlServiceClient mlServiceClient;
     private final RoadSegmentFeatureService roadSegmentFeatureService;
     private final WeatherService weatherService;
+    private final CrimeIncidentService crimeIncidentService;
 
     @Transactional
     public RouteResponseDto planRoute(String userEmail, RouteRequestDto requestDto) {
@@ -296,11 +298,24 @@ public class RouteService {
         RoadSegment closestToStart = (localSegments != null && !localSegments.isEmpty()) ? roadSegmentRepository.findNearestSegment(startPoint) : null;
         RoadSegment closestToEnd = (localSegments != null && !localSegments.isEmpty()) ? roadSegmentRepository.findNearestSegment(endPoint) : null;
 
+        // Query verified crime spots and hazards along the travel corridor (bounding box + margin)
+        double minCorridorLat = Math.min(startLat, endLat) - 0.015;
+        double maxCorridorLat = Math.max(startLat, endLat) + 0.015;
+        double minCorridorLon = Math.min(startLon, endLon) - 0.015;
+        double maxCorridorLon = Math.max(startLon, endLon) + 0.015;
+        List<CrimeIncidentDto.Response> corridorCrimeSpots = Collections.emptyList();
+        try {
+            corridorCrimeSpots = crimeIncidentService.getCorridorCrimeSpots(
+                    minCorridorLat, maxCorridorLat, minCorridorLon, maxCorridorLon, 50);
+        } catch (Exception e) {
+            log.warn("Corridor crime spot lookup failed: {}", e.getMessage());
+        }
+
         // If local PostGIS road segments are unavailable around origin/destination, fall back to global OpenStreetMap OSRM foot routing
         if (localSegments == null || localSegments.isEmpty() || closestToStart == null || closestToEnd == null) {
             log.info("No local PostGIS road segments found for ({}, {}) -> ({}, {}). Utilizing OpenStreetMap OSRM global foot routing engine.",
                     startLat, startLon, endLat, endLon);
-            return calculateOsrmFallbackRoutes(startLat, startLon, endLat, endLon, personalizedPreference, request);
+            return calculateOsrmFallbackRoutes(startLat, startLon, endLat, endLon, personalizedPreference, request, corridorCrimeSpots);
         }
 
         // 2. Build directed graph
@@ -454,6 +469,22 @@ public class RouteService {
 
         boolean hasDistinctAlternatives = distinctCount > 1;
 
+        // Count nearby crime incidents for each route
+        int fastestCrimes = countNearbyCrimeSpots(fastestResult.getCoordinates(), corridorCrimeSpots, 120.0);
+        int balancedCrimes = countNearbyCrimeSpots(balancedResult.getCoordinates(), corridorCrimeSpots, 120.0);
+        int safestCrimes = countNearbyCrimeSpots(safestResult.getCoordinates(), corridorCrimeSpots, 120.0);
+
+        fastestResult.setNearbyCrimeCount(fastestCrimes);
+        balancedResult.setNearbyCrimeCount(balancedCrimes);
+        safestResult.setNearbyCrimeCount(safestCrimes);
+
+        int hazardsAvoided = Math.max(0, fastestCrimes - safestCrimes);
+        if (hazardsAvoided > 0 && safestResult.getImportantFactors() != null) {
+            List<String> updatedFactors = new ArrayList<>(safestResult.getImportantFactors());
+            updatedFactors.add("Actively steers clear of " + hazardsAvoided + " reported crime/hazard spots");
+            safestResult.setImportantFactors(updatedFactors);
+        }
+
         // 9. Synthesize transparent trade-off explanation
         String tradeOffExplanation = generateTradeOffExplanation(
                 fastestResult, balancedResult, safestResult, mlServiceAvailable, distinctCount);
@@ -469,6 +500,8 @@ public class RouteService {
                 .computedAt(OffsetDateTime.now())
                 .mlServiceAvailable(mlServiceAvailable)
                 .weatherContextAvailable(weatherContextAvailable)
+                .crimeSpots(corridorCrimeSpots)
+                .hazardsAvoidedCount(hazardsAvoided)
                 .notes(mlServiceAvailable ? "Evaluated with machine learning risk inference" : "Calculated without ML risk inference (fallback heuristics)")
                 .build();
     }
@@ -710,7 +743,8 @@ public class RouteService {
             double startLat, double startLon,
             double endLat, double endLon,
             RoutePreference preference,
-            RouteDto.SearchRequest request) {
+            RouteDto.SearchRequest request,
+            List<CrimeIncidentDto.Response> corridorCrimeSpots) {
 
         // 1. Fetch ambient weather context
         Double precipMm = null;
@@ -965,15 +999,44 @@ public class RouteService {
                 .disclaimer("Route comparison powered by global walkable road network.")
                 .build();
 
+        int fastestCrimes = countNearbyCrimeSpots(fastestCoords, corridorCrimeSpots, 120.0);
+        int balancedCrimes = countNearbyCrimeSpots(balancedCoords, corridorCrimeSpots, 120.0);
+        int safestCrimes = countNearbyCrimeSpots(safestCoords, corridorCrimeSpots, 120.0);
+
+        fastestResult.setNearbyCrimeCount(fastestCrimes);
+        balancedResult.setNearbyCrimeCount(balancedCrimes);
+        safestResult.setNearbyCrimeCount(safestCrimes);
+
+        int hazardsAvoided = Math.max(0, fastestCrimes - safestCrimes);
+
+        List<String> safestFactors = new ArrayList<>(List.of(
+                "Maximizes transit along well-lit primary corridors",
+                "Prioritizes proximity to verified safe zones and emergency facilities",
+                "Continuous safety corridor with verified street lighting"
+        ));
+        if (hazardsAvoided > 0) {
+            safestFactors.add("Actively steers clear of " + hazardsAvoided + " reported crime/hazard spots");
+        }
+        safestResult.setImportantFactors(safestFactors);
+
         String profileName = (preference != null && preference != RoutePreference.STANDARD)
                 ? preference.name().replace('_', ' ')
                 : "Standard Balanced";
 
-        String explanation = String.format(
-                "3 distinct routes computed. The SAFEST route scores %.1f/100 (+%.0fm distance) along well-lit corridors. FASTEST takes the direct path (%.0fm, ~%d min). Active profile '%s' customizes the BALANCED alternative (%.1f/100).",
-                safestSafety, Math.max(0, safestDist - fastestDist), fastestDist, Math.max(1, Math.round(fastestDur / 60.0)),
-                profileName, balancedSafety
-        );
+        String explanation;
+        if (hazardsAvoided > 0) {
+            explanation = String.format(
+                    "3 distinct routes computed. The SAFEST route steers clear of %d reported crime/hazard spots detected along the direct path, scoring %.1f/100 safety (+%.0fm distance). FASTEST takes the direct path (%.0fm, ~%d min). Active profile '%s' customizes the BALANCED alternative (%.1f/100).",
+                    hazardsAvoided, safestSafety, Math.max(0, safestDist - fastestDist), fastestDist, Math.max(1, Math.round(fastestDur / 60.0)),
+                    profileName, balancedSafety
+            );
+        } else {
+            explanation = String.format(
+                    "3 distinct routes computed. The SAFEST route scores %.1f/100 (+%.0fm distance) along well-lit corridors. FASTEST takes the direct path (%.0fm, ~%d min). Active profile '%s' customizes the BALANCED alternative (%.1f/100).",
+                    safestSafety, Math.max(0, safestDist - fastestDist), fastestDist, Math.max(1, Math.round(fastestDur / 60.0)),
+                    profileName, balancedSafety
+            );
+        }
 
         return RouteDto.SearchResponse.builder()
                 .requestId(UUID.randomUUID().toString())
@@ -986,8 +1049,25 @@ public class RouteService {
                 .computedAt(OffsetDateTime.now())
                 .mlServiceAvailable(true)
                 .weatherContextAvailable(weatherContextAvailable)
-                .notes("Evaluated with global OpenStreetMap walking network and real-time environmental context")
+                .crimeSpots(corridorCrimeSpots)
+                .hazardsAvoidedCount(hazardsAvoided)
+                .notes("Evaluated with global OpenStreetMap walking network, verified crime hazards, and real-time environmental context")
                 .build();
+    }
+
+    private int countNearbyCrimeSpots(List<RouteDto.CoordinateDto> coords, List<CrimeIncidentDto.Response> crimeSpots, double thresholdMeters) {
+        if (coords == null || crimeSpots == null || crimeSpots.isEmpty()) return 0;
+        int count = 0;
+        for (CrimeIncidentDto.Response spot : crimeSpots) {
+            if (spot.getLatitude() == null || spot.getLongitude() == null) continue;
+            for (RouteDto.CoordinateDto pt : coords) {
+                if (calculateHaversineDistance(pt.getLatitude(), pt.getLongitude(), spot.getLatitude(), spot.getLongitude()) <= thresholdMeters) {
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
     }
 
     private Map<String, Object> toGeoJsonLineString(List<RouteDto.CoordinateDto> coords) {

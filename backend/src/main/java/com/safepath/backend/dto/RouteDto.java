@@ -98,6 +98,7 @@ public class RouteDto {
         private Boolean isMlScored;
         private String modelVersion;
         private Double litSegmentsPercentage;
+        private Integer nearbyCrimeCount;
         private String notes;
         private String disclaimer;
     }
@@ -118,6 +119,8 @@ public class RouteDto {
         private OffsetDateTime computedAt;
         private boolean mlServiceAvailable;
         private boolean weatherContextAvailable;
+        private List<CrimeIncidentDto.Response> crimeSpots;
+        private Integer hazardsAvoidedCount;
         private String notes;
     }
 }

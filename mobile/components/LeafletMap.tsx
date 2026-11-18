@@ -27,6 +27,18 @@ export interface LeafletSafeZone {
   verificationStatus?: string;
 }
 
+export interface LeafletCrimeSpot {
+  id: string;
+  crimeType: string;
+  crimeSubtype?: string;
+  severity: number;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  source?: string;
+  incidentDatetime?: string;
+}
+
 export interface LeafletHeatmapSegment {
   segmentId: number | string;
   coordinates: LeafletCoordinate[];
@@ -55,6 +67,8 @@ export interface LeafletMapProps {
   userLocation?: LeafletCoordinate | null;
   safeZones?: LeafletSafeZone[];
   onSafeZoneSelect?: (zone: LeafletSafeZone) => void;
+  crimeSpots?: LeafletCrimeSpot[];
+  onCrimeSpotSelect?: (spot: LeafletCrimeSpot) => void;
   heatmapSegments?: LeafletHeatmapSegment[];
   onSegmentSelect?: (segment: LeafletHeatmapSegment) => void;
   selectedSegmentId?: string | number | null;
@@ -81,6 +95,8 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
     userLocation,
     safeZones = [],
     onSafeZoneSelect,
+    crimeSpots = [],
+    onCrimeSpotSelect,
     heatmapSegments = [],
     onSegmentSelect,
     selectedSegmentId,
@@ -133,6 +149,17 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
         longitude: z.longitude,
         cat: CATEGORY_ICONS[z.zoneType] || CATEGORY_ICONS.OTHER,
       })),
+      crimeSpots: crimeSpots.map((c) => ({
+        id: c.id,
+        crimeType: c.crimeType,
+        crimeSubtype: c.crimeSubtype,
+        severity: c.severity,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        address: c.address,
+        source: c.source,
+        incidentDatetime: c.incidentDatetime,
+      })),
       heatmapSegments: heatmapSegments.map((s) => ({
         segmentId: s.segmentId,
         coordinates: s.coordinates,
@@ -162,6 +189,7 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
     isMapReady,
     userLocation,
     safeZones,
+    crimeSpots,
     heatmapSegments,
     selectedSegmentId,
     routes,
@@ -184,6 +212,11 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
         const found = safeZones.find((z) => String(z.id) === String(msg.id));
         if (found && onSafeZoneSelect) {
           onSafeZoneSelect(found);
+        }
+      } else if (msg.type === 'CRIME_SPOT_SELECT') {
+        const found = crimeSpots.find((c) => String(c.id) === String(msg.id));
+        if (found && onCrimeSpotSelect) {
+          onCrimeSpotSelect(found);
         }
       } else if (msg.type === 'SEGMENT_SELECT') {
         const found = heatmapSegments.find((s) => String(s.segmentId) === String(msg.id));
@@ -262,6 +295,54 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
     @keyframes pulseWave {
       0% { transform: scale(0.6); opacity: 1; }
       100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* Red Crime / Hazard Pin */
+    .crime-hazard-marker {
+      width: 28px;
+      height: 36px;
+      position: relative;
+      cursor: pointer;
+      filter: drop-shadow(0 3px 6px rgba(220, 38, 38, 0.45));
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .crime-hazard-marker:hover, .crime-hazard-marker:active {
+      transform: scale(1.25) translateY(-3px);
+    }
+    .crime-pin-head {
+      width: 26px;
+      height: 26px;
+      background: linear-gradient(135deg, #EF4444 0%, #B91C1C 100%);
+      border: 2px solid #FFFFFF;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .crime-pin-icon {
+      transform: rotate(45deg);
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1;
+      font-family: -apple-system, sans-serif;
+    }
+    .crime-pulse-ring {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      top: -3px;
+      left: -3px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.35);
+      animation: crimePulse 2s infinite ease-out;
+      pointer-events: none;
+    }
+    @keyframes crimePulse {
+      0% { transform: scale(0.6); opacity: 0.9; }
+      100% { transform: scale(1.8); opacity: 0; }
     }
 
     /* Safe Zone Badges */
@@ -351,6 +432,7 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
     var heatmapLayer = L.layerGroup().addTo(map);
     var routesLayer = L.layerGroup().addTo(map);
     var safeZonesLayer = L.layerGroup().addTo(map);
+    var crimeSpotsLayer = L.layerGroup().addTo(map);
     var endpointsLayer = L.layerGroup().addTo(map);
 
     // Post message helper
@@ -553,6 +635,44 @@ export const LeafletMap = forwardRef<LeafletMapRef, LeafletMapProps>((props, ref
           iconAnchor: [13, 13]
         });
         L.marker([data.destination.latitude, data.destination.longitude], { icon: dIco }).addTo(endpointsLayer);
+      }
+
+      // 7. Red Crime / Hazard Pins
+      crimeSpotsLayer.clearLayers();
+      if (data.crimeSpots && data.crimeSpots.length) {
+        data.crimeSpots.forEach(function(spot) {
+          var isHighSev = spot.severity >= 4;
+          var iconHtml = '<div class="crime-hazard-marker">' +
+            (isHighSev ? '<div class="crime-pulse-ring"></div>' : '') +
+            '<div class="crime-pin-head"><span class="crime-pin-icon">!</span></div>' +
+            '</div>';
+          var crimeIcon = L.divIcon({
+            className: '',
+            html: iconHtml,
+            iconSize: [28, 36],
+            iconAnchor: [14, 34],
+            popupAnchor: [0, -32]
+          });
+          var marker = L.marker([spot.latitude, spot.longitude], { icon: crimeIcon, zIndexOffset: 850 });
+          var sevLabel = spot.severity >= 4 ? 'HIGH' : (spot.severity >= 3 ? 'MODERATE' : 'LOW');
+          var sevColor = spot.severity >= 4 ? '#DC2626' : (spot.severity >= 3 ? '#EA580C' : '#D97706');
+          var popupHtml = '<div style="font-family:-apple-system,sans-serif;min-width:180px;padding:4px;">' +
+            '<div style="font-size:10px;font-weight:800;color:#DC2626;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:2px;">Reported Crime / Hazard</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#0F172A;margin-bottom:2px;">' + (spot.crimeType || 'Incident') + '</div>' +
+            (spot.crimeSubtype ? '<div style="font-size:11px;color:#475569;margin-bottom:4px;">' + spot.crimeSubtype + '</div>' : '') +
+            (spot.address ? '<div style="font-size:10px;color:#64748B;margin-bottom:4px;">📍 ' + spot.address + '</div>' : '') +
+            '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">' +
+              '<span style="padding:2px 6px;border-radius:4px;font-size:9px;font-weight:800;background:' + (spot.severity >= 4 ? '#FEE2E2' : '#FEF3C7') + ';color:' + sevColor + ';">' + sevLabel + ' RISK (' + spot.severity + '/5)</span>' +
+              '<span style="font-size:9px;color:#94A3B8;">' + (spot.source || 'Verified Record') + '</span>' +
+            '</div>' +
+            '</div>';
+          marker.bindPopup(popupHtml);
+          marker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            sendMsg({ type: 'CRIME_SPOT_SELECT', id: spot.id });
+          });
+          marker.addTo(crimeSpotsLayer);
+        });
       }
     };
 

@@ -25,6 +25,7 @@ import { fetchHeatmap, HeatmapSegment } from '../../services/heatmap';
 import { WeatherWidget } from '../../components/WeatherWidget';
 import { useAuth } from '../../context/AuthContext';
 import { searchPlaces, reverseGeocode, GeocodedPlace } from '../../services/geocoding';
+import { CrimeSpot, getCorridorCrimeSpots } from '../../services/crime';
 
 export interface Coordinate {
   latitude: number;
@@ -50,6 +51,7 @@ export interface RouteResult {
   litSegmentsPercentage?: number;
   notes?: string;
   disclaimer?: string;
+  nearbyCrimeCount?: number;
 }
 
 export interface RouteSearchResponse {
@@ -64,6 +66,8 @@ export interface RouteSearchResponse {
   mlServiceAvailable: boolean;
   weatherContextAvailable: boolean;
   notes?: string;
+  crimeSpots?: CrimeSpot[];
+  hazardsAvoidedCount?: number;
 }
 
 export interface RouteStep {
@@ -223,6 +227,11 @@ export default function RoutesScreen() {
   const [loadingHeatmap, setLoadingHeatmap] = useState(false);
   const [showDirections, setShowDirections] = useState(true);
   const [simulateHazardReroute, setSimulateHazardReroute] = useState(false);
+
+  // Red Crime & Hazard Spots state
+  const [crimeSpots, setCrimeSpots] = useState<CrimeSpot[]>([]);
+  const [showCrimePins, setShowCrimePins] = useState(true);
+  const [selectedCrimeSpot, setSelectedCrimeSpot] = useState<CrimeSpot | null>(null);
 
   // Active Live Navigation Mode state
   const [isNavigating, setIsNavigating] = useState(false);
@@ -544,6 +553,18 @@ export default function RoutesScreen() {
 
       const response = await api.post('/routes/search', payload);
       setSearchResponse(response.data);
+
+      // Handle real corridor crime spots returned by backend
+      if (response.data.crimeSpots && response.data.crimeSpots.length > 0) {
+        setCrimeSpots(response.data.crimeSpots);
+      } else {
+        try {
+          const spots = await getCorridorCrimeSpots(sLat, sLon, eLat, eLon);
+          setCrimeSpots(spots);
+        } catch {
+          setCrimeSpots([]);
+        }
+      }
 
       // Prioritize mode based on user's route preference
       if (user?.routePreference === 'FASTEST') {
@@ -1012,6 +1033,19 @@ export default function RoutesScreen() {
                   {isDuplicate && (
                     <Text style={styles.duplicateTag}>{r.duplicateOf ? `Same as ${r.duplicateOf}` : 'Duplicate'}</Text>
                   )}
+
+                  {r.nearbyCrimeCount !== undefined && r.nearbyCrimeCount > 0 && (
+                    <View style={styles.cardHazardBadge}>
+                      <Ionicons name="warning-outline" size={9} color="#DC2626" />
+                      <Text style={styles.cardHazardBadgeText}>{r.nearbyCrimeCount} spot{r.nearbyCrimeCount > 1 ? 's' : ''} near</Text>
+                    </View>
+                  )}
+                  {mode === 'SAFEST' && searchResponse.hazardsAvoidedCount !== undefined && searchResponse.hazardsAvoidedCount > 0 && (
+                    <View style={styles.cardAvoidedBadge}>
+                      <Ionicons name="shield-checkmark" size={9} color="#10B981" />
+                      <Text style={styles.cardAvoidedBadgeText}>Avoids {searchResponse.hazardsAvoidedCount}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -1105,6 +1139,67 @@ export default function RoutesScreen() {
             </Card>
           )}
 
+          {/* Corridor Crime Incidents & Hazard Alert Banner */}
+          {crimeSpots.length > 0 && (
+            <View style={styles.crimeHazardBanner} accessibilityRole="alert">
+              <View style={styles.crimeHazardBannerHeader}>
+                <View style={styles.crimeHazardBadgeIcon}>
+                  <Ionicons name="warning" size={14} color="#DC2626" />
+                </View>
+                <View style={styles.crimeHazardBannerTitles}>
+                  <Text style={styles.crimeHazardBannerTitle}>
+                    {crimeSpots.length} Reported Hazard / Crime Spots
+                  </Text>
+                  <Text style={styles.crimeHazardBannerSub}>
+                    {searchResponse.hazardsAvoidedCount && searchResponse.hazardsAvoidedCount > 0
+                      ? `SAFEST route detours around ${searchResponse.hazardsAvoidedCount} incident points`
+                      : 'Red pins mark verified incidents along this corridor'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.crimeToggleBtn, showCrimePins && styles.crimeToggleBtnActive]}
+                  onPress={() => setShowCrimePins(!showCrimePins)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Toggle crime hazard pins on map"
+                >
+                  <Ionicons name={showCrimePins ? "eye-outline" : "eye-off-outline"} size={13} color={showCrimePins ? "#FFFFFF" : "#64748B"} />
+                  <Text style={[styles.crimeToggleBtnText, showCrimePins && styles.crimeToggleBtnTextActive]}>
+                    {showCrimePins ? 'Pins ON' : 'Pins OFF'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Selected Crime Spot Detail Popup Card */}
+          {selectedCrimeSpot && (
+            <Card style={styles.crimeSpotDetailCard}>
+              <View style={styles.crimeSpotDetailHeader}>
+                <View style={styles.crimeSpotDetailIconNode}>
+                  <Ionicons name="alert-circle" size={18} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.crimeSpotDetailTitle}>{selectedCrimeSpot.crimeType || 'Reported Incident'}</Text>
+                  <Text style={styles.crimeSpotDetailSub}>{selectedCrimeSpot.crimeSubtype || 'Incident in travel corridor'}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedCrimeSpot(null)} accessibilityLabel="Close incident details">
+                  <Text style={{ fontSize: 16, color: '#94A3B8', padding: 4 }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.crimeSpotDetailBody}>
+                {selectedCrimeSpot.address ? (
+                  <Text style={styles.crimeSpotDetailAddr}>📍 {selectedCrimeSpot.address}</Text>
+                ) : null}
+                <View style={styles.crimeSpotDetailMetaRow}>
+                  <Text style={styles.crimeSpotDetailSeverity}>
+                    Severity: {selectedCrimeSpot.severity}/5 ({selectedCrimeSpot.severity >= 4 ? 'High Risk' : selectedCrimeSpot.severity >= 3 ? 'Moderate' : 'Low'})
+                  </Text>
+                  <Text style={styles.crimeSpotDetailSource}>{selectedCrimeSpot.source || 'Open Safety Data'}</Text>
+                </View>
+              </View>
+            </Card>
+          )}
+
           {/* Interactive Map (OpenStreetMap / CartoDB Voyager, Zero API Key Dependency) */}
           <View style={styles.mapWrapper}>
             <LeafletMap
@@ -1159,6 +1254,8 @@ export default function RoutesScreen() {
                   ? selectedRoute.coordinates[selectedRoute.coordinates.length - 1]
                   : { latitude: parseFloat(endLat) || 12.9716, longitude: parseFloat(endLon) || 77.6074 }
               }
+              crimeSpots={showCrimePins ? crimeSpots : []}
+              onCrimeSpotSelect={(spot) => setSelectedCrimeSpot(spot as any)}
             />
 
             {/* Floating Recenter GPS Action Button on Route Map */}
@@ -2580,5 +2677,148 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
     marginTop: 2,
+  },
+  crimeHazardBanner: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 10,
+  },
+  crimeHazardBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  crimeHazardBadgeIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crimeHazardBannerTitles: {
+    flex: 1,
+  },
+  crimeHazardBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991B1B',
+    letterSpacing: -0.2,
+  },
+  crimeHazardBannerSub: {
+    fontSize: 10,
+    color: '#B91C1C',
+    marginTop: 1,
+  },
+  crimeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  crimeToggleBtnActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  crimeToggleBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  crimeToggleBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  crimeSpotDetailCard: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#DC2626',
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+  },
+  crimeSpotDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  crimeSpotDetailIconNode: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crimeSpotDetailTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  crimeSpotDetailSub: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  crimeSpotDetailBody: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  crimeSpotDetailAddr: {
+    fontSize: 11,
+    color: '#334155',
+    marginBottom: 4,
+  },
+  crimeSpotDetailMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  crimeSpotDetailSeverity: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  crimeSpotDetailSource: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  cardHazardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 3,
+  },
+  cardHazardBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  cardAvoidedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginTop: 3,
+  },
+  cardAvoidedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#059669',
   },
 });
