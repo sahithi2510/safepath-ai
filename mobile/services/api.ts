@@ -9,8 +9,37 @@ export const api = axios.create({
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
   },
-  timeout: 35000,
+  timeout: 60000,
 });
+
+export interface ServerHealthStatus {
+  status: 'ONLINE' | 'WAKING' | 'OFFLINE';
+  latencyMs?: number;
+  message?: string;
+}
+
+export const checkAndWakeServer = async (): Promise<ServerHealthStatus> => {
+  const start = Date.now();
+  try {
+    const baseUrl = await getApiBaseUrl();
+    const rootUrl = baseUrl.replace(/\/api\/?$/, '');
+    const res = await axios.get(`${rootUrl}/actuator/health`, { timeout: 6000 });
+    if (res.status === 200) {
+      return { status: 'ONLINE', latencyMs: Date.now() - start };
+    }
+    return { status: 'WAKING', message: 'Server is starting up...' };
+  } catch (err: any) {
+    // If it timed out or network blip, initiate background wake-up call to spin up container
+    try {
+      const baseUrl = await getApiBaseUrl();
+      const rootUrl = baseUrl.replace(/\/api\/?$/, '');
+      axios.get(`${rootUrl}/actuator/health`, { timeout: 70000 }).catch(() => {});
+    } catch {
+      // Ignore background trigger errors
+    }
+    return { status: 'WAKING', message: 'Waking up cloud server...' };
+  }
+};
 
 export const getApiBaseUrl = async (): Promise<string> => {
   const custom = await SecureStore.getItemAsync('custom_api_url');

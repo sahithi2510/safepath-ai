@@ -1,0 +1,22 @@
+name: Render Server Keep-Alive
+
+on:
+  schedule:
+    # Runs every 10 minutes to prevent Render free tier from entering sleep mode (15m limit)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual one-click trigger from GitHub Actions
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Backend
+        run: |
+          echo "Pinging SafePath AI Render Backend to prevent sleep..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "https://safepath-backend-qsom.onrender.com/actuator/health")
+          echo "Render Status Code: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "SafePath AI backend is awake and healthy."
+          else
+            echo "Notice: Non-200 code ($HTTP_STATUS). Server was likely cold-starting."
+          fi
