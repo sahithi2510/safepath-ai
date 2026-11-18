@@ -9,7 +9,7 @@ export const api = axios.create({
     'Content-Type': 'application/json',
     'Bypass-Tunnel-Reminder': 'true',
   },
-  timeout: 10000,
+  timeout: 35000,
 });
 
 export const getApiBaseUrl = async (): Promise<string> => {

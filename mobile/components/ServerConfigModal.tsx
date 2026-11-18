@@ -72,10 +72,13 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({ visible, o
   };
 
   const handleSave = async () => {
-    const trimmed = url.trim().replace(/\/+$/, '');
+    let trimmed = url.trim().replace(/\/+$/, '');
     if (!trimmed) {
       Alert.alert('Invalid URL', 'Server URL cannot be empty');
       return;
+    }
+    if (!trimmed.endsWith('/api')) {
+      trimmed = `${trimmed}/api`;
     }
     await setApiBaseUrl(trimmed);
     Alert.alert('Saved', 'Server URL has been updated to: ' + trimmed);
@@ -106,7 +109,7 @@ export const ServerConfigModal: React.FC<ServerConfigModalProps> = ({ visible, o
           <View style={styles.presetsRow}>
             <TouchableOpacity
               style={styles.presetChip}
-              onPress={() => setUrl('https://safepath-backend.onrender.com/api')}
+              onPress={() => setUrl('https://safepath-backend-qsom.onrender.com/api')}
             >
               <Text style={styles.presetChipText}>☁️ Render Cloud</Text>
             </TouchableOpacity>
